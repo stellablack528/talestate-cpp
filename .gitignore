@@ -1,5 +1,6 @@
 /build/
 /out/
+/docs/blog/
 /.cache/
 /.idea/
 /.vscode/
