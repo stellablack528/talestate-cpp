@@ -1,8 +1,8 @@
 # TaleState C++ 📖
 
-> A deterministic, data-driven narrative validation engine for branching text RPGs, built with modern C++20 and JSON.
+> An agent-driven narrative engine for high-freedom text RPG worlds, with deterministic C++ rule arbitration.
 >
-> 使用现代 C++20 与 JSON 构建的、确定性且数据驱动的分支文字 RPG 剧情校验引擎。
+> 让创作者定义世界边界与结局、玩家自由行动、Agent 动态推动剧情、C++ 引擎裁决世界状态的文字 RPG 引擎。
 
 ---
 
@@ -10,19 +10,23 @@
 
 ### 中文
 
-**TaleState C++** 是一个独立、与具体世界观无关的文字 RPG 剧情引擎项目。
+**TaleState C++** 是一个独立、与具体世界观无关的高自由度文字 RPG Agent 引擎项目。
 
-剧情作者使用 JSON 描述章节、场景、节点、选项、条件与效果；C++ 核心负责把这些不可信输入转换为强类型模型，并在内容进入运行时之前检查格式、引用和剧情图结构。项目强调确定性、可测试性和清晰的安全边界，可作为命令行工具使用，也计划作为库接入桌面游戏或其他客户端。
+创作者负责定义世界观、世界规则、地点、NPC、剧情锚点以及多个结局，但不需要预先写死玩家抵达结局的每一条路线。玩家可以用自然语言自由行动；剧情 Agent 根据世界状态理解意图、扮演 NPC，并生成候选场景、事件与叙述。C++ 引擎是世界事实的唯一裁判，负责验证 Agent 提出的状态变化、原子提交合法结果，并保证物品、金币、关系、事件和结局条件不会被 AI 随意绕过。
 
-当前版本完成了 **Phase 0：项目骨架** 与 **Phase 1：剧情格式及校验器**。它已经可以验证 Story Package v1，但还不能直接游玩剧情。
+项目追求的不是无限制的 AI 即兴创作，而是**受约束的生成式叙事（Constrained Generative Narrative）**：创作者决定世界与命运的边界，Agent 创造旅途中的道路，玩家决定如何行动，引擎保证世界规则始终可信。
+
+当前版本只完成了这套系统的地基：**Phase 0：项目骨架** 与 **Phase 1：剧情格式及校验器**。它已经可以验证 Story Package v1，但自由输入、Agent 生成、状态推进和实际游玩循环尚未实现。
 
 ### English
 
-**TaleState C++** is a standalone, setting-agnostic narrative engine project for branching text RPGs.
+**TaleState C++** is a standalone, setting-agnostic agent-driven narrative engine for high-freedom text RPG worlds.
 
-Story authors describe chapters, scenes, nodes, choices, conditions, and effects in JSON. The C++ core converts this untrusted input into strongly typed models, then validates its structure, references, and narrative graph before it can reach a runtime. The project focuses on determinism, testability, and explicit trust boundaries, with both library integration and command-line usage in mind.
+Creators define the world, hard rules, locations, NPCs, story anchors, and possible endings without scripting every route between them. Players act through natural-language input. A narrative agent interprets intent and proposes scenes, events, NPC reactions, and narration, while the deterministic C++ engine remains the sole authority over world state and ending conditions.
 
-The current release covers **Phase 0: project foundation** and **Phase 1: story format and validation**. Story Package v1 validation is available; interactive play is not implemented yet.
+The goal is constrained generative narrative rather than unrestricted AI improvisation: creators set the boundaries, the agent creates possible paths, players decide how to act, and the engine ensures that the world never cheats.
+
+The current release only provides the foundation: **Phase 0: project setup** and **Phase 1: story format and validation**. Story Package v1 validation is available; free-form input, agent generation, state transitions, and interactive play are not implemented yet.
 
 ---
 
@@ -32,29 +36,29 @@ The current release covers **Phase 0: project foundation** and **Phase 1: story 
 
 | 功能 | 说明 |
 |---|---|
-| 📦 Story Package v1 | 使用 JSON 编写章节、场景、节点、分支选项、条件和效果 |
+| 📦 Story Package v1 | 使用 JSON 编写受控场景、剧情锚点原型、选项、条件和效果 |
 | ✅ 剧情包校验命令 | 使用 `storyforge validate <目录或文件>` 检查内容包 |
 | 🧱 结构错误诊断 | 检查 JSON 语法、必填字段、字段类型、未知字段、ID 和版本格式 |
 | 🔗 剧情引用诊断 | 检查无效入口、缺失变量、错误节点、场景和章节引用 |
 | 🗺️ 可达性检查 | 从剧情入口遍历显式跳转，拒绝无法到达的节点 |
 | 🧭 精确错误位置 | 输出错误代码、JSON 路径和可读错误信息，并返回非零退出码 |
-| 🏫 原创示例世界 | 提供“钟塔学院：失准的晨钟”，包含两个调查分支和两个结局 |
+| 🏫 原创示例世界 | 提供“钟塔学院：失准的晨钟”，用固定双分支验证格式与校验流程 |
 | 📐 机器可读规范 | 提供 Story Package v1 JSON Schema 和对应格式说明 |
 
-> 当前工具的直接使用者是剧情包作者与集成开发者。面向最终玩家的 `play` 命令将在确定性运行时完成后提供。
+> 当前工具的直接使用者仍是剧情包作者与集成开发者。Story Package v1 是验证安全边界的第一版格式，并不代表最终玩法会被限制为固定节点树；自由行动与 Agent 驱动的中间剧情将在运行时阶段加入。
 
 ### 👨‍💻 开发者视角 / For Developers
 
 | 实现 | 技术说明 |
 |---|---|
-| 🧩 强类型领域模型 | 章节、场景、节点、选项、变量等使用不同的强类型 ID |
+| 🧩 强类型领域模型 | 章节、场景、节点、选项、变量等使用不同的强类型 ID，为后续世界状态提供基础 |
 | 🔀 条件与效果模型 | 使用 `std::variant` 表达类型化条件和效果，避免核心逻辑依赖巨大字符串分支 |
 | 🪹 递归组合条件 | 支持 `all`、`any`、`not` 以及变量、物品、金币、场景、事件和 NPC 记忆条件 |
 | ⚙️ 通用效果类型 | 建模变量修改、金币、物品、场景切换、章节推进、NPC 记忆、事件和叙事追加 |
 | 📥 安全 JSON 加载 | 使用 nlohmann/json；限制输入为 16 MiB，并在构造模型前执行结构检查 |
 | 🛡️ 两阶段校验 | 分离结构校验与跨对象语义校验，生成统一 `ValidationReport` |
 | 🕸️ 图遍历诊断 | 从入口沿节点、场景和章节跳转分析不可达内容 |
-| 🧰 可复用核心库 | 校验能力位于独立 `storyforge` C++ 库，不依赖 Qt、MySQL 或 AI Provider |
+| 🧰 可复用核心库 | 校验能力位于独立 `storyforge` C++ 库，不依赖 Qt、数据库或任何特定 AI Provider |
 | 🧪 自动化测试 | Catch2 覆盖合法包、损坏 JSON、缺字段、重复 ID、坏引用、非法效果与不可达节点 |
 | 🔄 跨平台 CI | GitHub Actions 在 Windows 与 Linux 上构建、测试并验证示例剧情包 |
 
@@ -79,37 +83,53 @@ The current release covers **Phase 0: project foundation** and **Phase 1: story 
 
 ```mermaid
 flowchart TD
-    Author["剧情作者 / Story Author"] --> Package["Story Package JSON"]
-    Package --> Loader["JSON Loader"]
-    Loader --> Structure["结构校验 / Structural Validation"]
-    Structure --> Model["强类型 StoryPackage"]
-    Model --> Semantic["语义校验 / Semantic Validation"]
-    Semantic --> Graph["引用与可达性检查"]
-    Graph --> Report["ValidationReport"]
-    Report --> CLI["storyforge validate"]
+    Creator["创作者"] --> World["世界观 / 规则 / NPC / 剧情锚点 / 结局条件"]
 
-    Runtime["确定性运行时 · Phase 2"]
-    Graph -. "校验通过后" .-> Runtime
-    Runtime -. "未来" .-> Host["CLI / Qt / Other Hosts"]
+    subgraph Current ["✅ 当前已实现 · Validation Foundation"]
+        World --> Package["Story Package JSON"]
+        Package --> Loader["JSON Loader"]
+        Loader --> Validation["结构 + 语义 + 可达性校验"]
+        Validation --> Report["ValidationReport"]
+        Report --> ValidateCLI["storyforge validate"]
+    end
+
+    subgraph Target ["🚧 目标运行循环 · Agent RPG Runtime"]
+        Player["玩家自由输入"] --> Agent["剧情 Agent：理解意图并提出候选结果"]
+        State["权威 StoryState"] --> Agent
+        Validation --> Runtime["C++ 规则引擎"]
+        Agent --> Candidate["候选叙事 + 白名单 StoryCommand"]
+        Candidate --> Runtime
+        Runtime --> Delta["验证后的 StoryDelta"]
+        Delta --> State
+        State --> Ending["剧情锚点 / 结局条件判断"]
+        State --> Result["真实执行结果"]
+        Result --> Agent
+        Agent --> Narrative["场景 / NPC 反应 / 叙述"]
+        Narrative --> Player
+    end
 ```
 
 ### 安全边界 / Trust Boundary
 
 ```text
-用户世界设定
+创作者世界设定、硬规则与结局条件
     ↓
-候选剧情 JSON（始终视为不可信输入）
+Story Package / WorldSpec 候选 JSON
     ↓
-结构校验
+JSON Schema 结构校验
     ↓
 C++ 语义校验
     ↓
-自动模拟与人工确认（后续阶段）
+玩家自由输入 → Agent 生成候选叙事与候选命令
     ↓
-可发布剧情包
+C++ 白名单命令校验 → StoryDelta 完整验证
+    ↓
+原子提交权威 StoryState
+    ↓
+Agent 只能根据真实执行结果进行叙述
 ```
 
-剧情 JSON 不能执行代码、直接修改数据库或绕过 C++ 规则。未来接入 AI 时，AI 也只能生成候选 JSON，不能决定内容是否有效。
+Agent 负责想象，引擎负责判定。剧情 JSON 和 AI 输出都不能执行代码、直接修改数据库或绕过 C++ 规则；Agent 只能提出候选内容与白名单命令，只有经过确定性校验的 `StoryDelta` 才能改变世界事实。
 
 ---
 
@@ -172,20 +192,30 @@ talestate-cpp/
 
 ### 🚧 下一阶段 / Next Phase
 
+- [ ] 权威 `StoryState` 与世界状态初始化
 - [ ] 条件求值
 - [ ] 效果计算
 - [ ] `StoryCommand → StoryDelta → StoryEvent`
 - [ ] `StoryDelta` 完整验证与原子提交
-- [ ] `storyforge play`
+- [ ] `storyforge play` 最小游玩循环
+- [ ] 玩家选择后真正推进场景、变量、物品、关系和事件
+- [ ] 多结局条件判定
 - [ ] 固定随机种子与黄金结果测试
 
 ### 📋 后续规划 / Planned
 
-- [ ] 自动模拟、死路和目标可完成性诊断
+- [ ] `WorldSpec`：世界观、硬规则、势力、地点、NPC 与秘密
+- [ ] 剧情锚点和结局条件，不把中间过程写死为固定节点树
+- [ ] Provider 无关的 `IStoryAgent` 与自然语言行动解释
+- [ ] Agent 候选叙事、白名单命令、校验反馈与修复循环
+- [ ] NPC 目标、关系、记忆和主动行为
+- [ ] 动态场景、线索、冲突与世界事件生成
+- [ ] 自动模拟、死路、状态矛盾和结局可达性诊断
 - [ ] 内存状态存储与 SQLite 持久化
 - [ ] 存档版本和迁移机制
-- [ ] AI 候选剧情生成与自动修复闭环
-- [ ] Qt 及其他宿主适配器
+- [ ] 创作者界面：定义世界、规则、剧情锚点和结局
+- [ ] 玩家界面：自由输入、叙事输出、状态与存档
+- [ ] Qt、Web 或其他宿主适配器
 
 ---
 
@@ -286,15 +316,19 @@ ctest --test-dir build -C Release --output-on-failure
 
 完整字段定义见 [Story Package v1 格式说明](docs/format/story-package-v1.md) 和 [JSON Schema](schemas/story-package-v1.schema.json)。请注意：上面的片段只展示顶层形状，空章节数组不能通过语义校验；可运行示例请参考 [Clockwork Academy](examples/clockwork-academy/story.json)。
 
+Story Package v1 目前以固定节点和显式选择验证加载、引用与规则边界。它是 Agent 运行时的安全基础，而不是最终玩法上限。后续格式会进一步区分世界事实、剧情锚点、结局条件、权威状态与 Agent 候选事件，让中间剧情可以根据玩家自由行动动态发展。
+
 ---
 
 ## 🎯 项目目标 / Goals
 
-- 构建一个不绑定具体世界观的现代 C++ 文字 RPG 剧情引擎。
-- 将剧情内容、规则执行、UI、数据库与 AI Provider 解耦。
-- 让所有剧情执行可验证、可测试、可复现。
-- 为未来的 AI 剧情生成建立严格的候选内容安全边界。
-- 作为现代 C++、状态机、图遍历、事务和软件架构的渐进式实践项目。
+- 让创作者只需定义世界观、硬规则、NPC、剧情锚点和多个结局，不必写死全部路线。
+- 让玩家通过自然语言自由行动，使同一世界产生不同的过程、关系和结果。
+- 让 Agent 动态生成合理的场景、事件和 NPC 反应，但不能直接控制世界事实。
+- 由确定性 C++ 引擎裁决条件、效果、资源、关系、事件和结局状态。
+- 将创作内容、Agent、规则执行、UI、数据库与具体 AI Provider 解耦。
+- 让关键状态变化可验证、可测试、可记录，并能通过种子与事件日志复现。
+- 最终形成“创作者定义边界、Agent 创造道路、玩家决定行动、引擎保证规则”的高自由文字 RPG Agent。
 
 ---
 
