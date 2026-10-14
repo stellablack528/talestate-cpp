@@ -1,0 +1,10 @@
+{
+  "format": "storyforge.package/v1",
+  "id": "Invalid ID",
+  "title": "Invalid shape",
+  "version": "one",
+  "entry": { "chapter": "chapter.one", "scene": "scene.one", "node": "node.one" },
+  "variables": [],
+  "chapters": [],
+  "unexpected": true
+}

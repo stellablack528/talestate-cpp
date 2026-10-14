@@ -1,0 +1,106 @@
+{
+  "format": "storyforge.package/v1",
+  "id": "clockwork-academy",
+  "title": "钟塔学院：失准的晨钟",
+  "version": "0.1.0",
+  "entry": {
+    "chapter": "chapter.arrival",
+    "scene": "scene.bell-hall",
+    "node": "node.first-chime"
+  },
+  "variables": [
+    { "id": "var.courage", "initial": 0 },
+    { "id": "var.observed-gears", "initial": false }
+  ],
+  "chapters": [
+    {
+      "id": "chapter.arrival",
+      "title": "第一章：迟到的第十三响",
+      "entry_scene": "scene.bell-hall",
+      "scenes": [
+        {
+          "id": "scene.bell-hall",
+          "title": "主钟大厅",
+          "entry_node": "node.first-chime",
+          "nodes": [
+            {
+              "id": "node.first-chime",
+              "text": "晨钟敲了十三下。铜制报时鸟衔着一枚陌生齿轮，停在你面前。",
+              "choices": [
+                {
+                  "id": "choice.inspect",
+                  "text": "观察齿轮上的刻痕",
+                  "conditions": [],
+                  "effects": [
+                    { "type": "modify_variable", "variable": "var.observed-gears", "operation": "set", "value": true },
+                    { "type": "add_item", "item": "item.etched-gear", "quantity": 1 },
+                    { "type": "append_narrative", "text": "刻痕组成了一张通往校准室的微型地图。" }
+                  ],
+                  "target_node": "node.decision"
+                },
+                {
+                  "id": "choice.report",
+                  "text": "立刻向值守导师报告",
+                  "conditions": [],
+                  "effects": [
+                    { "type": "modify_variable", "variable": "var.courage", "operation": "add", "value": 1 },
+                    { "type": "write_npc_memory", "npc": "npc.tutor-lin", "key": "reported-the-chime", "value": true }
+                  ],
+                  "target_node": "node.decision"
+                }
+              ]
+            },
+            {
+              "id": "node.decision",
+              "text": "通往校准室的门开始闭合，你只能选择一种方式处理异常。",
+              "choices": [
+                {
+                  "id": "choice.repair",
+                  "text": "用找到的齿轮重新校准晨钟",
+                  "conditions": [
+                    {
+                      "type": "all",
+                      "conditions": [
+                        { "type": "variable", "variable": "var.observed-gears", "op": "eq", "value": true },
+                        { "type": "has_item", "item": "item.etched-gear", "quantity": 1 }
+                      ]
+                    }
+                  ],
+                  "effects": [
+                    { "type": "remove_item", "item": "item.etched-gear", "quantity": 1 },
+                    { "type": "complete_event", "event": "event.bell-repaired" }
+                  ],
+                  "target_node": "node.quiet-ending"
+                },
+                {
+                  "id": "choice.seek-help",
+                  "text": "与导师一起封存异常齿轮",
+                  "conditions": [
+                    { "type": "variable", "variable": "var.courage", "op": "gte", "value": 1 }
+                  ],
+                  "effects": [
+                    { "type": "complete_event", "event": "event.bell-contained" },
+                    { "type": "append_narrative", "text": "导师把第十三响记入了学院的封存档案。" }
+                  ],
+                  "target_node": "node.archive-ending"
+                }
+              ]
+            },
+            {
+              "id": "node.quiet-ending",
+              "text": "晨钟恢复十二响，但齿轮深处仍传来极轻的滴答声。",
+              "terminal": true,
+              "choices": []
+            },
+            {
+              "id": "node.archive-ending",
+              "text": "异常被封存。你的谨慎让导师决定邀请你加入钟械研究组。",
+              "terminal": true,
+              "choices": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

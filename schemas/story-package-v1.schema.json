@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://storyforge.dev/schemas/story-package-v1.schema.json",
+  "title": "StoryForge Story Package v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "id", "title", "version", "entry", "variables", "chapters"],
+  "properties": {
+    "format": { "const": "storyforge.package/v1" },
+    "id": { "$ref": "#/$defs/id" },
+    "title": { "$ref": "#/$defs/nonEmptyString" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "entry": { "$ref": "#/$defs/entry" },
+    "variables": { "type": "array", "items": { "$ref": "#/$defs/variable" } },
+    "chapters": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/chapter" } }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]*$" },
+    "value": { "type": ["string", "integer", "number", "boolean"] },
+    "compareOperator": { "enum": ["eq", "ne", "lt", "lte", "gt", "gte"] },
+    "entry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["chapter", "scene", "node"],
+      "properties": {
+        "chapter": { "$ref": "#/$defs/id" },
+        "scene": { "$ref": "#/$defs/id" },
+        "node": { "$ref": "#/$defs/id" }
+      }
+    },
+    "variable": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "initial"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "initial": { "$ref": "#/$defs/value" } }
+    },
+    "condition": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "variable", "op", "value"],
+          "properties": {
+            "type": { "const": "variable" }, "variable": { "$ref": "#/$defs/id" },
+            "op": { "$ref": "#/$defs/compareOperator" }, "value": { "$ref": "#/$defs/value" }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "item"],
+          "properties": { "type": { "const": "has_item" }, "item": { "$ref": "#/$defs/id" }, "quantity": { "type": "integer", "minimum": 1 } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "op", "amount"],
+          "properties": { "type": { "const": "gold" }, "op": { "$ref": "#/$defs/compareOperator" }, "amount": { "type": "integer" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "scene"],
+          "properties": { "type": { "const": "current_scene" }, "scene": { "$ref": "#/$defs/id" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "event"],
+          "properties": { "type": { "const": "event_triggered" }, "event": { "$ref": "#/$defs/id" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "npc", "key", "value"],
+          "properties": { "type": { "const": "npc_memory" }, "npc": { "$ref": "#/$defs/id" }, "key": { "$ref": "#/$defs/nonEmptyString" }, "value": { "$ref": "#/$defs/value" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "conditions"],
+          "properties": { "type": { "enum": ["all", "any"] }, "conditions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "condition"],
+          "properties": { "type": { "const": "not" }, "condition": { "$ref": "#/$defs/condition" } }
+        }
+      ]
+    },
+    "effect": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "variable", "operation", "value"],
+          "properties": { "type": { "const": "modify_variable" }, "variable": { "$ref": "#/$defs/id" }, "operation": { "enum": ["set", "add"] }, "value": { "$ref": "#/$defs/value" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "amount"],
+          "properties": { "type": { "const": "add_gold" }, "amount": { "type": "integer" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "item"],
+          "properties": { "type": { "enum": ["add_item", "remove_item"] }, "item": { "$ref": "#/$defs/id" }, "quantity": { "type": "integer", "minimum": 1 } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "scene"],
+          "properties": { "type": { "const": "switch_scene" }, "scene": { "$ref": "#/$defs/id" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "chapter"],
+          "properties": { "type": { "const": "advance_chapter" }, "chapter": { "$ref": "#/$defs/id" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "npc", "key", "value"],
+          "properties": { "type": { "const": "write_npc_memory" }, "npc": { "$ref": "#/$defs/id" }, "key": { "$ref": "#/$defs/nonEmptyString" }, "value": { "$ref": "#/$defs/value" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "event"],
+          "properties": { "type": { "const": "complete_event" }, "event": { "$ref": "#/$defs/id" } }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "text"],
+          "properties": { "type": { "const": "append_narrative" }, "text": { "$ref": "#/$defs/nonEmptyString" } }
+        }
+      ]
+    },
+    "choice": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "text", "conditions", "effects"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "text": { "$ref": "#/$defs/nonEmptyString" },
+        "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+        "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } },
+        "target_node": { "$ref": "#/$defs/id" }
+      }
+    },
+    "node": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "text", "choices"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "text": { "$ref": "#/$defs/nonEmptyString" },
+        "terminal": { "type": "boolean", "default": false },
+        "choices": { "type": "array", "items": { "$ref": "#/$defs/choice" } }
+      }
+    },
+    "scene": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "entry_node", "nodes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "title": { "$ref": "#/$defs/nonEmptyString" },
+        "entry_node": { "$ref": "#/$defs/id" },
+        "nodes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/node" } }
+      }
+    },
+    "chapter": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "entry_scene", "scenes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "title": { "$ref": "#/$defs/nonEmptyString" },
+        "entry_scene": { "$ref": "#/$defs/id" },
+        "scenes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/scene" } }
+      }
+    }
+  }
+}
