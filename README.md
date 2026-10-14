@@ -1,8 +1,8 @@
 # TaleState C++ 📖
 
-> An agent-driven narrative engine for high-freedom text RPG worlds, with deterministic C++ rule arbitration.
+> Bring your own model. TaleState provides the RPG intelligence and deterministic C++ rule arbitration.
 >
-> 让创作者定义世界边界与结局、玩家自由行动、Agent 动态推动剧情、C++ 引擎裁决世界状态的文字 RPG 引擎。
+> 用户自带 API Key，即可把不同市面大模型接入同一套可靠世界规则的高自由文字 RPG Agent 引擎。
 
 ---
 
@@ -14,19 +14,51 @@
 
 创作者负责定义世界观、世界规则、地点、NPC、剧情锚点以及多个结局，但不需要预先写死玩家抵达结局的每一条路线。玩家可以用自然语言自由行动；剧情 Agent 根据世界状态理解意图、扮演 NPC，并生成候选场景、事件与叙述。C++ 引擎是世界事实的唯一裁判，负责验证 Agent 提出的状态变化、原子提交合法结果，并保证物品、金币、关系、事件和结局条件不会被 AI 随意绕过。
 
+项目采用 **BYOK（Bring Your Own Key）**：用户选择自己信任的兼容模型服务，填写 API 地址、API Key 和模型名称。TaleState 不重新训练一个基础模型，而是提供已经为文字 RPG 工程化的 Agent 能力，包括角色职责、上下文组装、可用动作、结构化输出、规则校验、失败修复和记忆管理。用户不需要自己研究复杂提示词，也不必把游戏绑定到某一家模型供应商。
+
 项目追求的不是无限制的 AI 即兴创作，而是**受约束的生成式叙事（Constrained Generative Narrative）**：创作者决定世界与命运的边界，Agent 创造旅途中的道路，玩家决定如何行动，引擎保证世界规则始终可信。
 
-当前版本只完成了这套系统的地基：**Phase 0：项目骨架** 与 **Phase 1：剧情格式及校验器**。它已经可以验证 Story Package v1，但自由输入、Agent 生成、状态推进和实际游玩循环尚未实现。
+当前版本已完成 **Phase 0：项目骨架**、**Phase 1：剧情格式及校验器**，以及 BYOK 模型接入层的第一部分。它已经可以验证 Story Package v1，并能以统一接口构造和解析 OpenAI-compatible Chat Completions 请求；内置网络传输、自由输入、Agent 工作流、状态推进和实际游玩循环仍在开发中。
 
 ### English
 
-**TaleState C++** is a standalone, setting-agnostic agent-driven narrative engine for high-freedom text RPG worlds.
+**TaleState C++** is a standalone, setting- and provider-agnostic agent runtime for high-freedom text RPG worlds.
 
 Creators define the world, hard rules, locations, NPCs, story anchors, and possible endings without scripting every route between them. Players act through natural-language input. A narrative agent interprets intent and proposes scenes, events, NPC reactions, and narration, while the deterministic C++ engine remains the sole authority over world state and ending conditions.
 
 The goal is constrained generative narrative rather than unrestricted AI improvisation: creators set the boundaries, the agent creates possible paths, players decide how to act, and the engine ensures that the world never cheats.
 
-The current release only provides the foundation: **Phase 0: project setup** and **Phase 1: story format and validation**. Story Package v1 validation is available; free-form input, agent generation, state transitions, and interactive play are not implemented yet.
+TaleState uses a BYOK model: users supply the endpoint, API key, and model of a compatible service. TaleState supplies the RPG-specific agent workflow, structured actions, validation, repair, and memory strategy, so model choice does not define the rules of the world.
+
+The current release provides the project and validation foundation plus the first provider-neutral API layer. Story Package v1 validation and OpenAI-compatible request/response adaptation are available; built-in networking, free-form input, agent orchestration, state transitions, and interactive play are not implemented yet.
+
+---
+
+## 🔑 开箱即用的 BYOK 模式 / Bring Your Own Key
+
+最终用户不需要训练模型，也不需要从零编写一套文游提示词。首次启动时只需配置：
+
+```text
+API 类型：OpenAI-compatible
+Base URL：https://你的模型服务地址/v1
+API Key：由用户自己的模型服务商提供
+Model：用户选择的模型名称
+```
+
+TaleState 在模型与游戏世界之间提供同一套专用能力：
+
+| TaleState 提供 | 用户获得 |
+|---|---|
+| 文游 Agent 的角色与工作流 | 模型知道自己何时规划、何时调用规则、何时只负责叙述 |
+| 精简且有权限边界的上下文 | NPC 不该知道的秘密不会仅因为模型“猜到”就成为世界事实 |
+| 结构化候选命令 | 大模型输出先变成可检查的数据，而不是直接篡改存档 |
+| 校验失败后的修复循环 | 非法行动会被解释和重试，不会将半套错误结果写入世界 |
+| 统一 Provider 接口 | 更换兼容模型时不需要重写剧情和规则引擎 |
+| C++ 权威状态与事件日志 | 物品、金币、关系、时间和结局条件保持可验证、可追踪 |
+
+> 这里的“开箱即用”是指 TaleState 会把文字 RPG 所需的 Agent 能力预设并工程化，而不是替用户训练或微调一个新的基础模型。用户带来模型能力，TaleState 让这份能力遵守同一套游戏规则。
+
+**一句话原则：AI 负责想象，TaleState 负责让世界保持真实。**
 
 ---
 
@@ -44,6 +76,7 @@ The current release only provides the foundation: **Phase 0: project setup** and
 | 🧭 精确错误位置 | 输出错误代码、JSON 路径和可读错误信息，并返回非零退出码 |
 | 🏫 原创示例世界 | 提供“钟塔学院：失准的晨钟”，用固定双分支验证格式与校验流程 |
 | 📐 机器可读规范 | 提供 Story Package v1 JSON Schema 和对应格式说明 |
+| 🔑 BYOK 接入基础 | 用户可以在未来宿主应用中提供自己的 API 地址、Key 和模型，无需绑定官方账号 |
 
 > 当前工具的直接使用者仍是剧情包作者与集成开发者。Story Package v1 是验证安全边界的第一版格式，并不代表最终玩法会被限制为固定节点树；自由行动与 Agent 驱动的中间剧情将在运行时阶段加入。
 
@@ -59,6 +92,9 @@ The current release only provides the foundation: **Phase 0: project setup** and
 | 🛡️ 两阶段校验 | 分离结构校验与跨对象语义校验，生成统一 `ValidationReport` |
 | 🕸️ 图遍历诊断 | 从入口沿节点、场景和章节跳转分析不可达内容 |
 | 🧰 可复用核心库 | 校验能力位于独立 `storyforge` C++ 库，不依赖 Qt、数据库或任何特定 AI Provider |
+| 🔌 统一模型接口 | `ILlmProvider` 隔离 Agent 与具体模型服务，`IHttpTransport` 隔离协议与宿主网络库 |
+| 🌐 兼容协议适配 | `OpenAiCompatibleProvider` 构造 `/chat/completions` 请求并解析内容、用量和请求 ID |
+| 🔐 BYOK 安全边界 | 校验 HTTPS、限制请求与响应体大小、日志描述自动隐藏 API Key，并区分可重试错误 |
 | 🧪 自动化测试 | Catch2 覆盖合法包、损坏 JSON、缺字段、重复 ID、坏引用、非法效果与不可达节点 |
 | 🔄 跨平台 CI | GitHub Actions 在 Windows 与 Linux 上构建、测试并验证示例剧情包 |
 
@@ -71,6 +107,8 @@ The current release only provides the foundation: **Phase 0: project setup** and
 | 开发语言 / Language | **C++20** |
 | 构建系统 / Build | **CMake 3.24+** |
 | JSON 解析 / Parsing | **nlohmann/json 3.11.3** |
+| 模型接口 / Model API | **Provider-neutral C++ API + OpenAI-compatible adapter** |
+| 密钥模式 / Credentials | **BYOK（用户自带 API Key）** |
 | 格式规范 / Schema | **JSON Schema Draft 2020-12** |
 | 命令行 / CLI | **CLI11 2.4.2** |
 | 自动测试 / Testing | **Catch2 3.7.1 + CTest** |
@@ -94,8 +132,12 @@ flowchart TD
     end
 
     subgraph Target ["🚧 目标运行循环 · Agent RPG Runtime"]
-        Player["玩家自由输入"] --> Agent["剧情 Agent：理解意图并提出候选结果"]
+        Player["玩家自由输入"] --> Agent["TaleState Agent：理解意图并提出候选结果"]
         State["权威 StoryState"] --> Agent
+        Config["用户 API 地址 / Key / Model"] --> Provider["统一 ILlmProvider"]
+        Provider --> MarketModel["用户选择的兼容大模型 API"]
+        MarketModel --> Provider
+        Provider --> Agent
         Validation --> Runtime["C++ 规则引擎"]
         Agent --> Candidate["候选叙事 + 白名单 StoryCommand"]
         Candidate --> Runtime
@@ -129,7 +171,7 @@ C++ 白名单命令校验 → StoryDelta 完整验证
 Agent 只能根据真实执行结果进行叙述
 ```
 
-Agent 负责想象，引擎负责判定。剧情 JSON 和 AI 输出都不能执行代码、直接修改数据库或绕过 C++ 规则；Agent 只能提出候选内容与白名单命令，只有经过确定性校验的 `StoryDelta` 才能改变世界事实。
+Agent 负责想象，引擎负责判定。剧情 JSON 和 AI 输出都不能执行代码、直接修改数据库或绕过 C++ 规则；Agent 只能提出候选内容与白名单命令，只有经过确定性校验的 `StoryDelta` 才能改变世界事实。API Key 只属于用户的本地运行配置，不属于 Story Package、存档或事件日志。
 
 ---
 
@@ -144,11 +186,13 @@ talestate-cpp/
 ├── CONTRIBUTING.md                   # 贡献与测试约定
 │
 ├── include/storyforge/               # 公共 C++ API
+│   ├── agent/llm_provider.hpp        # BYOK 配置、统一模型接口与 HTTP 传输边界
 │   ├── model/story_types.hpp         # 强类型 ID、条件、效果和 Story Package
 │   ├── io/story_loader.hpp           # JSON 加载接口
 │   └── validation/validation.hpp     # 校验问题、报告和校验入口
 │
 ├── src/
+│   ├── agent/openai_compatible_provider.cpp # 兼容请求构造、响应解析和安全检查
 │   ├── io/story_loader.cpp           # JSON 解析与结构检查
 │   └── validation/story_validator.cpp # 引用、效果与图可达性检查
 │
@@ -163,6 +207,7 @@ talestate-cpp/
 │
 ├── tests/
 │   ├── loader_tests.cpp              # 加载与结构校验测试
+│   ├── provider_tests.cpp            # BYOK 请求、脱敏、HTTPS 与错误处理测试
 │   ├── validator_tests.cpp           # 语义与可达性测试
 │   └── fixtures/                     # 非法剧情包测试数据
 │
@@ -188,7 +233,11 @@ talestate-cpp/
 - [x] 剧情节点可达性分析
 - [x] `storyforge validate` 命令
 - [x] 原创分支剧情示例
-- [x] 9 项自动化测试
+- [x] Provider 无关的 `ILlmProvider` 接口
+- [x] 可替换的 `IHttpTransport` 网络边界
+- [x] OpenAI-compatible Chat Completions 请求与响应适配
+- [x] BYOK 配置校验、API Key 脱敏和请求/响应大小限制
+- [x] 13 项自动化测试
 
 ### 🚧 下一阶段 / Next Phase
 
@@ -198,6 +247,10 @@ talestate-cpp/
 - [ ] `StoryCommand → StoryDelta → StoryEvent`
 - [ ] `StoryDelta` 完整验证与原子提交
 - [ ] `storyforge play` 最小游玩循环
+- [ ] 为桌面端或 CLI 接入真正的 HTTPS 网络传输实现
+- [ ] 首次启动的 API 地址、Key、模型配置与连通性测试
+- [ ] API Key 的系统安全凭据存储，禁止进入配置明文、日志和存档
+- [ ] Agent 上下文构建、结构化候选命令和校验失败修复循环
 - [ ] 玩家选择后真正推进场景、变量、物品、关系和事件
 - [ ] 多结局条件判定
 - [ ] 固定随机种子与黄金结果测试
@@ -207,6 +260,7 @@ talestate-cpp/
 - [ ] `WorldSpec`：世界观、硬规则、势力、地点、NPC 与秘密
 - [ ] 剧情锚点和结局条件，不把中间过程写死为固定节点树
 - [ ] Provider 无关的 `IStoryAgent` 与自然语言行动解释
+- [ ] 多家模型协议适配器及本地模型服务支持
 - [ ] Agent 候选叙事、白名单命令、校验反馈与修复循环
 - [ ] NPC 目标、关系、记忆和主动行为
 - [ ] 动态场景、线索、冲突与世界事件生成
@@ -292,7 +346,9 @@ ctest --test-dir build -C Release --output-on-failure
 - 不可达节点
 - 非法变量效果
 
-当前基线：**9/9 测试通过**。
+当前基线：**13/13 测试通过**。
+
+其中模型接口测试使用内存中的假网络传输，不会读取真实 API Key、访问外部服务或产生模型费用。
 
 ---
 
@@ -324,6 +380,8 @@ Story Package v1 目前以固定节点和显式选择验证加载、引用与规
 
 - 让创作者只需定义世界观、硬规则、NPC、剧情锚点和多个结局，不必写死全部路线。
 - 让玩家通过自然语言自由行动，使同一世界产生不同的过程、关系和结果。
+- 让用户自带兼容模型 API，在不同市面模型之间切换，而不改变世界规则与剧情内容。
+- 将文字 RPG 所需的提示、上下文、动作协议、校验和修复流程产品化，做到配置模型后即可使用。
 - 让 Agent 动态生成合理的场景、事件和 NPC 反应，但不能直接控制世界事实。
 - 由确定性 C++ 引擎裁决条件、效果、资源、关系、事件和结局状态。
 - 将创作内容、Agent、规则执行、UI、数据库与具体 AI Provider 解耦。

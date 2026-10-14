@@ -30,6 +30,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json CLI11)
 
 add_library(storyforge
+    src/agent/openai_compatible_provider.cpp
     src/io/story_loader.cpp
     src/validation/story_validator.cpp
 )
