@@ -1,0 +1,37 @@
+{
+    "scenes": {
+        "bell_hall": {
+            "name": "钟塔学院主钟大厅",
+            "actions": {
+                "go_archive": {
+                    "label": "前往钟械档案室",
+                    "next_scene": "archive"
+                },
+                "go_sealed_tower": {
+                    "label": "尝试进入封锁的上层钟室",
+                    "next_scene": "sealed_tower",
+                    "required_level": 5
+                }
+            }
+        },
+        "archive": {
+            "name": "钟械档案室",
+            "actions": {
+                "return_hall": {
+                    "label": "返回大厅",
+                    "next_scene": "bell_hall"
+                }
+            }
+        },
+        "sealed_tower": {
+            "name": "封锁的上层钟室",
+            "actions": {
+                "return_hall": {
+                    "label": "返回大厅",
+                    "next_scene": "bell_hall"
+                }
+            }
+        }
+    },
+    "start_scene": "bell_hall"
+}

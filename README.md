@@ -205,6 +205,9 @@ talestate-cpp/
 ├── examples/clockwork-academy/
 │   └── story.json                    # 原创双分支示例剧情
 │
+├── demos/storyagent-python/           # 独立 Python 可玩原型，不参与 C++ 构建
+│   └── README.md                     # 原型运行方式与范围
+│
 ├── tests/
 │   ├── loader_tests.cpp              # 加载与结构校验测试
 │   ├── provider_tests.cpp            # BYOK 请求、脱敏、HTTPS 与错误处理测试
@@ -274,6 +277,8 @@ talestate-cpp/
 ---
 
 ## 🚀 快速开始 / Quick Start
+
+想先体验“选择动作 → 规则判定 → AI 描写”的控制台原型，可以运行独立的 [StoryAgent Python Demo](demos/storyagent-python/README.md)。它使用自己的简化场景格式和 DeepSeek API，与当前 C++ 校验工具分别运行。
 
 ### 环境要求 / Prerequisites
 
