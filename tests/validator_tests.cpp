@@ -67,3 +67,24 @@ TEST_CASE("adding a non-numeric value is an illegal effect") {
     CHECK_FALSE(report.valid());
     CHECK(has_code(report, "semantic.invalid_effect"));
 }
+
+TEST_CASE("a choice cannot combine node and scene jumps") {
+    auto package = valid_package();
+    auto& choice = package.chapters.front().scenes.front().nodes.front().choices.front();
+    choice.effects.push_back(storyforge::StoryEffect{
+        storyforge::SwitchSceneEffect{storyforge::SceneId{"scene.bell-hall"}}});
+    const auto report = storyforge::validate_story_package(package);
+    CHECK_FALSE(report.valid());
+    CHECK(has_code(report, "semantic.invalid_effect"));
+}
+
+TEST_CASE("variable comparisons must use the declared value type") {
+    auto package = valid_package();
+    auto& condition = package.chapters.front().scenes.front().nodes[1].choices.front().conditions.front();
+    auto& all = std::get<storyforge::AllCondition>(condition.data);
+    auto& comparison = std::get<storyforge::VariableComparison>(all.conditions.front()->data);
+    comparison.value = std::string{"true"};
+    const auto report = storyforge::validate_story_package(package);
+    CHECK_FALSE(report.valid());
+    CHECK(has_code(report, "semantic.invalid_condition"));
+}

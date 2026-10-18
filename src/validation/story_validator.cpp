@@ -50,14 +50,23 @@ const StoryNode* find_node(const StoryScene& scene, const NodeId& id) {
 }
 
 void validate_condition(const StoryCondition& condition, const std::string& path,
-                        const std::set<std::string>& variables,
+                        const std::map<std::string, StoryValue>& variables,
                         const std::set<std::string>& scenes,
                         ValidationReport& report) {
     std::visit(Overloaded{
         [&](const VariableComparison& value) {
-            if (!variables.contains(value.variable.value()))
+            const auto found = variables.find(value.variable.value());
+            if (found == variables.end())
                 report.add_error("semantic.missing_reference", path + "/variable",
                                  "unknown variable '" + value.variable.value() + "'");
+            else if (found->second.index() != value.value.index())
+                report.add_error("semantic.invalid_condition", path + "/value",
+                                 "comparison value must match the variable type");
+            else if (value.op != CompareOperator::equal && value.op != CompareOperator::not_equal &&
+                     !std::holds_alternative<std::int64_t>(found->second) &&
+                     !std::holds_alternative<double>(found->second))
+                report.add_error("semantic.invalid_condition", path + "/op",
+                                 "ordered comparison requires a numeric variable");
         },
         [&](const CurrentSceneCondition& value) {
             if (!scenes.contains(value.scene.value()))
@@ -82,18 +91,22 @@ void validate_condition(const StoryCondition& condition, const std::string& path
 }
 
 void validate_effect(const StoryEffect& effect, const std::string& path,
-                     const std::set<std::string>& variables,
+                     const std::map<std::string, StoryValue>& variables,
                      const std::set<std::string>& scenes,
                      const std::set<std::string>& chapters,
                      ValidationReport& report) {
     std::visit(Overloaded{
         [&](const ModifyVariableEffect& value) {
-            if (!variables.contains(value.variable.value()))
+            const auto found = variables.find(value.variable.value());
+            if (found == variables.end())
                 report.add_error("semantic.missing_reference", path + "/variable",
                                  "unknown variable '" + value.variable.value() + "'");
+            else if (found->second.index() != value.value.index())
+                report.add_error("semantic.invalid_effect", path + "/value",
+                                 "effect value must match the variable type");
             if (value.operation == VariableOperation::add &&
-                !std::holds_alternative<std::int64_t>(value.value) &&
-                !std::holds_alternative<double>(value.value))
+                (!std::holds_alternative<std::int64_t>(value.value) &&
+                 !std::holds_alternative<double>(value.value)))
                 report.add_error("semantic.invalid_effect", path + "/value",
                                  "add operation requires a numeric value");
         },
@@ -152,14 +165,17 @@ ValidationReport validate_story_package(const StoryPackage& package) {
     if (package.chapters.empty())
         report.add_error("semantic.empty_package", "/chapters", "at least one chapter is required");
 
-    std::set<std::string> variable_ids;
+    std::map<std::string, StoryValue> variables;
     std::set<std::string> chapter_ids;
     std::set<std::string> scene_ids;
     std::map<std::string, Location> locations;
 
-    for (std::size_t i = 0; i < package.variables.size(); ++i)
-        require_unique(variable_ids, package.variables[i].id.value(),
-                       "/variables/" + std::to_string(i) + "/id", "variable", report);
+    for (std::size_t i = 0; i < package.variables.size(); ++i) {
+        const auto& variable = package.variables[i];
+        if (!variables.emplace(variable.id.value(), variable.initial_value).second)
+            report.add_error("semantic.duplicate_id", "/variables/" + std::to_string(i) + "/id",
+                             "duplicate variable id '" + variable.id.value() + "'");
+    }
 
     for (std::size_t ci = 0; ci < package.chapters.size(); ++ci) {
         const auto& chapter = package.chapters[ci];
@@ -205,17 +221,20 @@ ValidationReport validate_story_package(const StoryPackage& package) {
             const auto& choice = node.choices[hi];
             const auto choice_path = location.path + "/choices/" + std::to_string(hi);
             for (std::size_t i = 0; i < choice.conditions.size(); ++i)
-                validate_condition(choice.conditions[i], choice_path + "/conditions/" + std::to_string(i), variable_ids, scene_ids, report);
+                validate_condition(choice.conditions[i], choice_path + "/conditions/" + std::to_string(i), variables, scene_ids, report);
             for (std::size_t i = 0; i < choice.effects.size(); ++i)
-                validate_effect(choice.effects[i], choice_path + "/effects/" + std::to_string(i), variable_ids, scene_ids, chapter_ids, report);
+                validate_effect(choice.effects[i], choice_path + "/effects/" + std::to_string(i), variables, scene_ids, chapter_ids, report);
             if (choice.target_node && find_node(*location.scene, *choice.target_node) == nullptr)
                 report.add_error("semantic.missing_reference", choice_path + "/target_node",
                                  "target node '" + choice.target_node->value() + "' is not in this scene");
-            const bool changes_position = choice.target_node.has_value() ||
-                std::any_of(choice.effects.begin(), choice.effects.end(), [](const StoryEffect& effect) {
+            const auto position_effects = std::count_if(choice.effects.begin(), choice.effects.end(), [](const StoryEffect& effect) {
                     return std::holds_alternative<SwitchSceneEffect>(effect.data) ||
                            std::holds_alternative<AdvanceChapterEffect>(effect.data);
                 });
+            if (position_effects + static_cast<int>(choice.target_node.has_value()) > 1)
+                report.add_error("semantic.invalid_effect", choice_path,
+                                 "a choice must not contain multiple position changes");
+            const bool changes_position = choice.target_node.has_value() || position_effects > 0;
             if (!changes_position && !node.terminal)
                 report.add_warning("semantic.choice_stays", choice_path,
                                    "choice has no target or position-changing effect");

@@ -32,6 +32,7 @@ FetchContent_MakeAvailable(nlohmann_json CLI11)
 add_library(storyforge
     src/agent/openai_compatible_provider.cpp
     src/io/story_loader.cpp
+    src/runtime/story_runtime.cpp
     src/validation/story_validator.cpp
 )
 add_library(StoryForge::storyforge ALIAS storyforge)
@@ -44,7 +45,7 @@ target_include_directories(storyforge
 target_link_libraries(storyforge PUBLIC nlohmann_json::nlohmann_json)
 
 if(MSVC)
-    target_compile_options(storyforge PRIVATE /W4 /permissive- /EHsc)
+    target_compile_options(storyforge PRIVATE /W4 /permissive- /EHsc /utf-8)
 else()
     target_compile_options(storyforge PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
@@ -52,6 +53,9 @@ endif()
 add_executable(storyforge_cli apps/storyforge-cli/main.cpp)
 set_target_properties(storyforge_cli PROPERTIES OUTPUT_NAME storyforge)
 target_link_libraries(storyforge_cli PRIVATE StoryForge::storyforge CLI11::CLI11)
+if(MSVC)
+    target_compile_options(storyforge_cli PRIVATE /utf-8)
+endif()
 
 if(STORYFORGE_BUILD_TESTS)
     include(CTest)

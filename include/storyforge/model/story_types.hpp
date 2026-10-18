@@ -137,6 +137,8 @@ struct StoryEntry {
     ChapterId chapter;
     SceneId scene;
     NodeId node;
+
+    bool operator==(const StoryEntry&) const = default;
 };
 
 struct StoryPackage {
@@ -149,8 +151,6 @@ struct StoryPackage {
     std::vector<StoryChapter> chapters;
 };
 
-// Runtime-facing value objects are defined now so later phases can add behavior
-// without changing the public vocabulary established by Package v1.
 struct StoryState {
     StoryEntry position;
     std::map<VariableId, StoryValue> variables;
@@ -158,6 +158,9 @@ struct StoryState {
     std::map<ItemId, std::int64_t> inventory;
     std::map<NpcId, std::map<std::string, StoryValue>> npc_memory;
     std::set<EventId> completed_events;
+    std::uint64_t turn{0};
+
+    bool operator==(const StoryState&) const = default;
 };
 
 struct StoryEvent {
