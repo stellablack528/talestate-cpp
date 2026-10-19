@@ -1,0 +1,81 @@
+{
+  "format": "storyforge.package/v1",
+  "id": "harbor-lantern",
+  "title": "雾港：失踪的航灯",
+  "version": "0.1.0",
+  "entry": { "chapter": "chapter.fog", "scene": "scene.dock", "node": "node.arrival" },
+  "variables": [
+    { "id": "var.knows-route", "initial": false }
+  ],
+  "world_context": "雾港每晚靠一盏航灯引导归船。船夫阿澜知道灯塔的旧航道，但只会在交谈后告诉玩家。码头有一只封存的灯芯箱。把灯芯带回灯塔可以救船；也可以把它卖给商人，但两种结局互斥。",
+  "agent_routes": [
+    { "from": "scene.dock", "to": "scene.lighthouse", "conditions": [{ "type": "variable", "variable": "var.knows-route", "op": "eq", "value": true }] },
+    { "from": "scene.lighthouse", "to": "scene.dock", "conditions": [] }
+  ],
+  "agent_npcs": [
+    { "id": "npc.alan", "name": "船夫阿澜", "scene": "scene.dock" },
+    { "id": "npc.keeper", "name": "守灯人", "scene": "scene.lighthouse" }
+  ],
+  "agent_actions": [
+    {
+      "id": "action.ask-ferryman", "text": "向船夫阿澜打听通往灯塔的旧航道",
+      "conditions": [{ "type": "current_scene", "scene": "scene.dock" }, { "type": "variable", "variable": "var.knows-route", "op": "eq", "value": false }],
+      "effects": [
+        { "type": "modify_variable", "variable": "var.knows-route", "operation": "set", "value": true },
+        { "type": "modify_npc_relationship", "npc": "npc.alan", "amount": 1 },
+        { "type": "write_npc_memory", "npc": "npc.alan", "key": "shared-route", "value": true }
+      ]
+    },
+    {
+      "id": "action.take-wick", "text": "打开码头的灯芯箱，取出一枚灯芯",
+      "conditions": [{ "type": "current_scene", "scene": "scene.dock" }, { "type": "not", "condition": { "type": "has_item", "item": "item.wick", "quantity": 1 } }],
+      "effects": [{ "type": "add_item", "item": "item.wick", "quantity": 1 }]
+    },
+    {
+      "id": "action.light-beacon", "text": "沿已知航道前往灯塔，用手中的灯芯重新点亮航灯",
+      "conditions": [
+        { "type": "current_scene", "scene": "scene.lighthouse" },
+        { "type": "variable", "variable": "var.knows-route", "op": "eq", "value": true },
+        { "type": "npc_relationship", "npc": "npc.alan", "op": "gte", "value": 1 },
+        { "type": "has_item", "item": "item.wick", "quantity": 1 }
+      ],
+      "effects": [
+        { "type": "remove_item", "item": "item.wick", "quantity": 1 },
+        { "type": "complete_event", "event": "event.ships-saved" }
+      ],
+      "target_node": "node.saved-ending"
+    },
+    {
+      "id": "action.sell-wick", "text": "将手中的灯芯卖给码头商人",
+      "conditions": [{ "type": "current_scene", "scene": "scene.dock" }, { "type": "has_item", "item": "item.wick", "quantity": 1 }],
+      "effects": [
+        { "type": "remove_item", "item": "item.wick", "quantity": 1 },
+        { "type": "add_gold", "amount": 5 },
+        { "type": "complete_event", "event": "event.wick-sold" }
+      ],
+      "target_node": "node.sold-ending"
+    },
+    { "id": "action.explore", "text": "观察雾港、与人交谈或做不改变权威状态的尝试", "conditions": [], "effects": [] }
+  ],
+  "chapters": [
+    {
+      "id": "chapter.fog", "title": "雾港之夜", "entry_scene": "scene.dock",
+      "scenes": [
+        {
+          "id": "scene.dock", "title": "雾中的码头", "entry_node": "node.arrival",
+          "nodes": [
+            { "id": "node.arrival", "text": "浓雾吞没码头，远处灯塔一片漆黑。船夫阿澜正在寻找失踪的航灯灯芯。", "choices": [] },
+            { "id": "node.sold-ending", "text": "金币落进你的手心，港外的船仍在浓雾中徘徊。", "terminal": true, "choices": [] }
+          ]
+        },
+        {
+          "id": "scene.lighthouse", "title": "旧灯塔", "entry_node": "node.beacon-base",
+          "nodes": [
+            { "id": "node.beacon-base", "text": "失明的航灯立在塔顶，守灯人在一旁等待能点燃它的灯芯。", "choices": [] },
+            { "id": "node.saved-ending", "text": "灯塔重亮，雾中的归船找到了港口。", "terminal": true, "choices": [] }
+          ]
+        }
+      ]
+    }
+  ]
+}

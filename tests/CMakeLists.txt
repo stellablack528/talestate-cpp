@@ -1,4 +1,5 @@
 add_executable(storyforge_tests
+    agent_tests.cpp
     loader_tests.cpp
     provider_tests.cpp
     runtime_tests.cpp

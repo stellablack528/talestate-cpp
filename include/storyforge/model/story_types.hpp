@@ -67,6 +67,7 @@ struct GoldCondition { CompareOperator op{CompareOperator::greater_equal}; std::
 struct CurrentSceneCondition { SceneId scene; };
 struct EventTriggeredCondition { EventId event; };
 struct NpcMemoryCondition { NpcId npc; std::string key; StoryValue value; };
+struct NpcRelationshipCondition { NpcId npc; CompareOperator op{CompareOperator::greater_equal}; std::int64_t value{0}; };
 
 struct StoryCondition;
 using ConditionPtr = std::shared_ptr<StoryCondition>;
@@ -77,7 +78,8 @@ struct NotCondition { ConditionPtr condition; };
 struct StoryCondition {
     using Data = std::variant<VariableComparison, HasItemCondition, GoldCondition,
                               CurrentSceneCondition, EventTriggeredCondition,
-                              NpcMemoryCondition, AllCondition, AnyCondition, NotCondition>;
+                              NpcMemoryCondition, NpcRelationshipCondition,
+                              AllCondition, AnyCondition, NotCondition>;
     Data data;
 };
 
@@ -93,6 +95,7 @@ struct RemoveItemEffect { ItemId item; std::int64_t quantity{1}; };
 struct SwitchSceneEffect { SceneId scene; };
 struct AdvanceChapterEffect { ChapterId chapter; };
 struct WriteNpcMemoryEffect { NpcId npc; std::string key; StoryValue value; };
+struct ModifyNpcRelationshipEffect { NpcId npc; std::int64_t amount{0}; };
 struct CompleteEventEffect { EventId event; };
 struct AppendNarrativeEffect { std::string text; };
 
@@ -100,7 +103,7 @@ struct StoryEffect {
     using Data = std::variant<ModifyVariableEffect, AddGoldEffect, AddItemEffect,
                               RemoveItemEffect, SwitchSceneEffect, AdvanceChapterEffect,
                               WriteNpcMemoryEffect, CompleteEventEffect,
-                              AppendNarrativeEffect>;
+                              ModifyNpcRelationshipEffect, AppendNarrativeEffect>;
     Data data;
 };
 
@@ -110,6 +113,38 @@ struct StoryChoice {
     std::vector<StoryCondition> conditions;
     std::vector<StoryEffect> effects;
     std::optional<NodeId> target_node;
+};
+
+// Author-owned world capabilities. The agent may select and compose these,
+// but it cannot invent effects that the package did not authorize.
+struct AgentAction {
+    ChoiceId id;
+    std::string text;
+    std::vector<StoryCondition> conditions;
+    std::vector<StoryEffect> effects;
+    std::optional<NodeId> target_node;
+};
+
+// Generic capabilities: the model supplies a target (and, for talk, a topic),
+// while the package defines which destinations and NPCs exist.
+struct AgentRoute {
+    SceneId from;
+    SceneId to;
+    std::vector<StoryCondition> conditions;
+};
+
+struct AgentNpc {
+    NpcId id;
+    std::string name;
+    SceneId scene;
+};
+
+enum class AgentActionKind { authored, move, talk };
+
+struct AgentActionRequest {
+    AgentActionKind kind{AgentActionKind::authored};
+    std::string target;
+    std::string topic;
 };
 
 struct StoryNode {
@@ -149,6 +184,10 @@ struct StoryPackage {
     StoryEntry entry;
     std::vector<StoryVariable> variables;
     std::vector<StoryChapter> chapters;
+    std::string world_context;
+    std::vector<AgentAction> agent_actions;
+    std::vector<AgentRoute> agent_routes;
+    std::vector<AgentNpc> agent_npcs;
 };
 
 struct StoryState {
@@ -157,6 +196,7 @@ struct StoryState {
     std::int64_t gold{0};
     std::map<ItemId, std::int64_t> inventory;
     std::map<NpcId, std::map<std::string, StoryValue>> npc_memory;
+    std::map<NpcId, std::int64_t> npc_relationships;
     std::set<EventId> completed_events;
     std::uint64_t turn{0};
 

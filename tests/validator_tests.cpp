@@ -88,3 +88,20 @@ TEST_CASE("variable comparisons must use the declared value type") {
     CHECK_FALSE(report.valid());
     CHECK(has_code(report, "semantic.invalid_condition"));
 }
+
+TEST_CASE("parameterized routes and NPC locations require real unique world references") {
+    auto package = valid_package();
+    package.agent_routes.push_back(package.agent_routes.front());
+    package.agent_routes.front().to = storyforge::SceneId{"scene.nowhere"};
+    package.agent_npcs.front().scene = storyforge::SceneId{"scene.nowhere"};
+    const auto report = storyforge::validate_story_package(package);
+    CHECK_FALSE(report.valid());
+    CHECK(has_code(report, "semantic.missing_reference"));
+
+    auto duplicate = valid_package();
+    duplicate.agent_routes.push_back(duplicate.agent_routes.front());
+    duplicate.agent_npcs.push_back(duplicate.agent_npcs.front());
+    const auto duplicate_report = storyforge::validate_story_package(duplicate);
+    CHECK_FALSE(duplicate_report.valid());
+    CHECK(has_code(duplicate_report, "semantic.duplicate_id"));
+}

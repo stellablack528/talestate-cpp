@@ -245,3 +245,30 @@ TEST_CASE("chapter effects enter the destination chapter's entry scene and node"
     REQUIRE(storyforge::current_node(package, state) != nullptr);
     CHECK(storyforge::current_node(package, state)->terminal);
 }
+
+TEST_CASE("NPC relationship changes are typed, conditional, and atomic on overflow") {
+    auto package = example_package();
+    auto& choice = package.chapters.front().scenes.front().nodes.front().choices.front();
+    const storyforge::NpcId npc{"npc.tutor-lin"};
+    choice.effects.push_back(storyforge::StoryEffect{
+        storyforge::ModifyNpcRelationshipEffect{npc, 2}});
+    auto state = storyforge::make_initial_state(package);
+    CHECK(storyforge::evaluate_condition(storyforge::StoryCondition{
+        storyforge::NpcRelationshipCondition{npc, storyforge::CompareOperator::equal, 0}}, state));
+    successful(storyforge::execute_command(package, state,
+                                           {storyforge::ChoiceId{"choice.inspect"}}));
+    CHECK(state.npc_relationships.at(npc) == 2);
+    CHECK(storyforge::evaluate_condition(storyforge::StoryCondition{
+        storyforge::NpcRelationshipCondition{npc, storyforge::CompareOperator::greater_equal, 2}}, state));
+
+    choice.effects.push_back(storyforge::StoryEffect{
+        storyforge::ModifyNpcRelationshipEffect{npc, std::numeric_limits<std::int64_t>::max()}});
+    state = storyforge::make_initial_state(package);
+    const auto before = state;
+    const auto rejected = storyforge::execute_command(package, state,
+                                                       {storyforge::ChoiceId{"choice.inspect"}});
+    REQUIRE(std::holds_alternative<storyforge::RuntimeError>(rejected));
+    CHECK(std::get<storyforge::RuntimeError>(rejected).code ==
+          storyforge::RuntimeErrorCode::arithmetic_overflow);
+    CHECK(state == before);
+}

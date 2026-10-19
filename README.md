@@ -18,7 +18,7 @@
 
 项目追求的不是无限制的 AI 即兴创作，而是**受约束的生成式叙事（Constrained Generative Narrative）**：创作者决定世界与命运的边界，Agent 创造旅途中的道路，玩家决定如何行动，引擎保证世界规则始终可信。
 
-当前版本已完成项目骨架、Story Package v1 校验、BYOK 模型接入层的第一部分，以及 **C++ 固定选项游玩闭环**。现在可以在终端玩通“钟塔学院”的两个结局；自由输入、Agent 规划、模型叙述接入、网络传输和存档仍在开发中。
+当前版本提供两种入口：命令行的固定选项玩法，以及可选构建的 **Qt 本地桌面原型**。桌面原型支持导入带 Agent 规则的世界包、填写自己的兼容模型 API、自然语言输入、Agent 规划与修复、C++ 权威状态裁决和生成式叙述。通用行动协议 v1 支持带参数的跨场景移动与 NPC 交谈；示例包含钟塔学院与雾港两个不同世界。它仍是早期工具：路线、NPC 所在地及其他改变事实的效果需要创作者声明，完整可视化世界编辑器、存档和更开放的动态事件规则尚未实现。
 
 ### English
 
@@ -30,7 +30,7 @@ The goal is constrained generative narrative rather than unrestricted AI improvi
 
 TaleState uses a BYOK model: users supply the endpoint, API key, and model of a compatible service. TaleState supplies the RPG-specific agent workflow, structured actions, validation, repair, and memory strategy, so model choice does not define the rules of the world.
 
-The current release includes Story Package v1 validation, the first provider-neutral API layer, and a deterministic C++ choice-based play loop with two endings. Built-in networking, free-form input, agent orchestration, model-generated narration, and save files are not implemented yet.
+The current release also includes an optional Qt desktop prototype: import a world package, enter an OpenAI-compatible endpoint/key/model, type free-form actions, and see model planning, repair, narration, and C++-committed state. A parameterized action protocol supports rule-checked movement and NPC conversation across two distinct example worlds. Routes, NPC placement, and other state-changing capabilities remain author-declared; visual authoring, saves, and richer dynamic events remain future work.
 
 ---
 
@@ -77,9 +77,12 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 🧭 精确错误位置 | 输出错误代码、JSON 路径和可读错误信息，并返回非零退出码 |
 | 🏫 原创示例世界 | 提供“钟塔学院：失准的晨钟”，用固定双分支验证格式与校验流程 |
 | 📐 机器可读规范 | 提供 Story Package v1 JSON Schema 和对应格式说明 |
-| 🔑 BYOK 接入基础 | 用户可以在未来宿主应用中提供自己的 API 地址、Key 和模型，无需绑定官方账号 |
+| 🔑 BYOK 接入 | 在桌面原型中输入自己的 API 地址、Key 和模型名称；Key 仅保留在本次运行内存中 |
+| 🖥️ 本地桌面原型 | 导入带 Agent 规则的世界包，配置自己的模型，在界面中自由输入并查看剧情和权威状态 |
+| 🧭 Agent 规则组合 | 通过自然语言选择并组合创作者授权的行动，不必预写每条完整剧情路线 |
+| 🚶 通用行动协议 v1 | 用同一套 `move` / `talk` 请求在不同世界移动与交谈；非法目标、封锁路线和不在场的 NPC 都会被拒绝 |
 
-> 当前工具的直接使用者仍是剧情包作者与集成开发者。Story Package v1 是验证安全边界的第一版格式，并不代表最终玩法会被限制为固定节点树；自由行动与 Agent 驱动的中间剧情将在运行时阶段加入。
+> 桌面原型已能处理自由文字；移动依赖世界包中的路线，交谈依赖 NPC 的位置，其余影响金币、物品、关系和结局的效果仍需创作者通过 `agent_actions` 授权。模型可以自由叙述，不能自由篡改事实。这是高自由工具的第一阶段，不等于任意行动都已有完整规则支持。
 
 ### 👨‍💻 开发者视角 / For Developers
 
@@ -95,6 +98,9 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 🕸️ 图遍历诊断 | 从入口沿节点、场景和章节跳转分析不可达内容 |
 | 🧰 可复用核心库 | 校验能力位于独立 `storyforge` C++ 库，不依赖 Qt、数据库或任何特定 AI Provider |
 | 🔌 统一模型接口 | `ILlmProvider` 隔离 Agent 与具体模型服务，`IHttpTransport` 隔离协议与宿主网络库 |
+| 🤖 Agent 闭环 | 规划结构化授权行动、C++ 校验、失败修复、按提交结果叙述，保留最近回合的事实摘要 |
+| 🧭 参数化行动执行器 | 接收 `type`、`target`、交谈 `topic`；按顺序校验路线、条件、NPC 在场性，并原子提交或整轮回滚 |
+| 🖥️ Qt 宿主 | 可选桌面应用实现真实 HTTPS 请求；核心 `storyforge` 库不依赖 Qt |
 | 🌐 兼容协议适配 | `OpenAiCompatibleProvider` 构造 `/chat/completions` 请求并解析内容、用量和请求 ID |
 | 🔐 BYOK 安全边界 | 校验 HTTPS、限制请求与响应体大小、日志描述自动隐藏 API Key，并区分可重试错误 |
 | 🧪 自动化测试 | Catch2 覆盖合法包、损坏 JSON、缺字段、重复 ID、坏引用、非法效果与不可达节点 |
@@ -110,6 +116,7 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 构建系统 / Build | **CMake 3.24+** |
 | JSON 解析 / Parsing | **nlohmann/json 3.11.3** |
 | 模型接口 / Model API | **Provider-neutral C++ API + OpenAI-compatible adapter** |
+| 桌面界面 / Desktop | **Qt 6 Widgets + Qt Network（可选）** |
 | 密钥模式 / Credentials | **BYOK（用户自带 API Key）** |
 | 格式规范 / Schema | **JSON Schema Draft 2020-12** |
 | 命令行 / CLI | **CLI11 2.4.2** |
@@ -125,7 +132,7 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 flowchart TD
     Creator["创作者"] --> World["世界观 / 规则 / NPC / 剧情锚点 / 结局条件"]
 
-    subgraph Current ["✅ 当前已实现 · Validation + Choice Runtime"]
+    subgraph Current ["✅ 当前已实现 · 规则核心 + Agent 桌面原型"]
         World --> Package["Story Package JSON"]
         Package --> Loader["JSON Loader"]
         Loader --> Validation["结构 + 语义 + 可达性校验"]
@@ -133,26 +140,28 @@ flowchart TD
         Report --> ValidateCLI["storyforge validate"]
         Validation --> PlayCLI["storyforge play"]
         PlayerChoice["玩家编号选择"] --> PlayCLI
-        PlayCLI --> Runtime["C++ 条件与效果引擎"]
+        Player["玩家自然语言行动"] --> Desktop["Qt 本地界面"]
+        Config["用户 API 地址 / Key / Model"] --> Desktop
+        Desktop --> Agent["TaleState Agent：规划与修复"]
+        Agent --> Provider["兼容模型服务"]
+        Provider --> Agent
+        Package --> Agent
+        Agent --> Candidate["授权行动 ID 列表"]
+        Candidate --> Runtime["C++ 条件与效果引擎"]
+        PlayCLI --> Runtime
         Runtime --> Delta["验证后的 StoryDelta"]
         Delta --> State["权威 StoryState"]
-        State --> PlayCLI
+        State --> Agent
+        State --> Desktop
+        Delta --> Agent
+        Agent --> Narrative["依据已提交事实生成叙述"]
+        Narrative --> Desktop
     end
 
-    subgraph Target ["🚧 目标扩展 · Agent RPG Runtime"]
-        Player["玩家自由输入"] --> Agent["TaleState Agent：理解意图并提出候选结果"]
-        State["权威 StoryState"] --> Agent
-        Config["用户 API 地址 / Key / Model"] --> Provider["统一 ILlmProvider"]
-        Provider --> MarketModel["用户选择的兼容大模型 API"]
-        MarketModel --> Provider
-        Provider --> Agent
-        Agent --> Candidate["候选叙事 + 白名单 StoryCommand"]
-        Candidate --> Runtime
-        State --> Ending["剧情锚点 / 结局条件判断"]
-        State --> Result["真实执行结果"]
-        Result --> Agent
-        Agent --> Narrative["场景 / NPC 反应 / 叙述"]
-        Narrative --> Player
+    subgraph Target ["🚧 后续扩展"]
+        AuthorUI["可视化世界编辑器"] --> Package
+        State --> Save["存档 / 回放"]
+        Package --> RichRules["参数化行动与动态结局规则"]
     end
 ```
 
@@ -176,7 +185,7 @@ C++ 白名单命令校验 → StoryDelta 完整验证
 Agent 只能根据真实执行结果进行叙述
 ```
 
-当前 `play` 使用编号选择，C++ 引擎已经是状态变化的唯一入口；整轮效果先在临时状态中检查，失败时真实状态保持不变。未来 Agent 负责想象，引擎继续负责判定。剧情 JSON 和 AI 输出都不能执行代码、直接修改数据库或绕过 C++ 规则。API Key 只属于用户的本地运行配置，不属于 Story Package、存档或事件日志。
+`play` 继续提供编号选择，Qt 桌面端提供自由文字入口。两者都只通过 C++ 引擎改变状态；Agent 提出的行动必须在世界包白名单中，整轮效果先在临时状态中检查，失败时真实状态保持不变。剧情 JSON 和 AI 输出不能执行代码、直接修改数据库或绕过 C++ 规则。API Key 只在桌面端本次运行的内存中使用，不属于 Story Package 或事件日志。
 
 ---
 
@@ -192,6 +201,7 @@ talestate-cpp/
 │
 ├── include/storyforge/               # 公共 C++ API
 │   ├── agent/llm_provider.hpp        # BYOK 配置、统一模型接口与 HTTP 传输边界
+│   ├── agent/story_agent.hpp         # Provider 无关的 Agent 游玩闭环
 │   ├── model/story_types.hpp         # 强类型 ID、条件、效果和 Story Package
 │   ├── io/story_loader.hpp           # JSON 加载接口
 │   ├── runtime/story_runtime.hpp     # 状态初始化、条件求值和命令执行接口
@@ -199,23 +209,28 @@ talestate-cpp/
 │
 ├── src/
 │   ├── agent/openai_compatible_provider.cpp # 兼容请求构造、响应解析和安全检查
+│   ├── agent/story_agent.cpp         # 规划、修复、事实叙述与回合摘要
 │   ├── io/story_loader.cpp           # JSON 解析与结构检查
 │   ├── runtime/story_runtime.cpp     # 原子状态推进、效果计算与运行时错误
 │   └── validation/story_validator.cpp # 引用、效果与图可达性检查
 │
 ├── apps/storyforge-cli/
 │   └── main.cpp                      # storyforge validate / play 命令
+├── apps/talestate-desktop/            # 可选 Qt 本地界面与真实 HTTPS 传输
 │
 ├── schemas/
 │   └── story-package-v1.schema.json # Story Package v1 JSON Schema
 │
 ├── examples/clockwork-academy/
 │   └── story.json                    # 原创双分支示例剧情
+├── examples/harbor-lantern/
+│   └── story.json                    # 第二个世界，测试通用 Agent 规则
 │
 ├── demos/storyagent-python/           # 独立 Python 可玩原型，不参与 C++ 构建
 │   └── README.md                     # 原型运行方式与范围
 │
 ├── tests/
+│   ├── agent_tests.cpp               # 跨世界 Agent 规则、修复与事实回退测试
 │   ├── loader_tests.cpp              # 加载与结构校验测试
 │   ├── provider_tests.cpp            # BYOK 请求、脱敏、HTTPS 与错误处理测试
 │   ├── runtime_tests.cpp             # 双结局、条件、原子提交和状态推进测试
@@ -253,16 +268,17 @@ talestate-cpp/
 - [x] `storyforge play` 命令行游玩循环
 - [x] 玩家选择后推进节点、变量、物品、NPC 记忆和事件
 - [x] 钟塔学院两个可游玩的结局
-- [x] 25 项自动化测试
+- [x] 跨两个世界的 Agent 行动规则与原子组合执行
+- [x] 跨两个世界的参数化移动、NPC 交谈与封锁路线校验
+- [x] 结构化规划、最多一次修复、事实约束叙述与最近回合摘要
+- [x] 可选 Qt 本地界面与真实 HTTPS 传输
+- [x] 导入世界包、BYOK 配置、自由文字输入和权威状态展示
 
 ### 🚧 下一阶段 / Next Phase
 
-- [ ] 为桌面端或 CLI 接入真正的 HTTPS 网络传输实现
-- [ ] 首次启动的 API 地址、Key、模型配置与连通性测试
+- [ ] 界面中的独立“测试连接”按钮与更多兼容模型协议适配
 - [ ] API Key 的系统安全凭据存储，禁止进入配置明文、日志和存档
-- [ ] Agent 上下文构建、结构化候选命令和校验失败修复循环
-- [ ] 自然语言输入映射为候选命令，并复用现有 C++ 判定
-- [ ] 将 LLM 叙述接到已提交的事件结果上
+- [ ] 更丰富的世界能力规则，超越当前创作者预声明的行动集合
 - [ ] 更丰富的关系状态和动态结局条件
 - [ ] 固定随机种子与黄金结果测试
 
@@ -270,23 +286,24 @@ talestate-cpp/
 
 - [ ] `WorldSpec`：世界观、硬规则、势力、地点、NPC 与秘密
 - [ ] 剧情锚点和结局条件，不把中间过程写死为固定节点树
-- [ ] Provider 无关的 `IStoryAgent` 与自然语言行动解释
+- [ ] 更丰富的自然语言行动参数化解释
 - [ ] 多家模型协议适配器及本地模型服务支持
-- [ ] Agent 候选叙事、白名单命令、校验反馈与修复循环
+- [x] Agent 白名单行动、校验反馈与修复循环的初版
 - [ ] NPC 目标、关系、记忆和主动行为
 - [ ] 动态场景、线索、冲突与世界事件生成
 - [ ] 自动模拟、死路、状态矛盾和结局可达性诊断
 - [ ] 内存状态存储与 SQLite 持久化
 - [ ] 存档版本和迁移机制
 - [ ] 创作者界面：定义世界、规则、剧情锚点和结局
-- [ ] 玩家界面：自由输入、叙事输出、状态与存档
-- [ ] Qt、Web 或其他宿主适配器
+- [ ] 玩家界面中的存档、回放与可视化关系图
+- [x] Qt 本地宿主原型
+- [ ] Web 或其他宿主适配器
 
 ---
 
 ## 🚀 快速开始 / Quick Start
 
-主项目现在可以直接在 C++ 命令行玩通“钟塔学院”。想体验早期“规则判定 + AI 描写”实验，也可以运行独立的 [StoryAgent Python Demo](demos/storyagent-python/README.md)；它使用自己的简化场景格式与 DeepSeek API。
+有 Qt 6 Widgets/Network 时，可运行本地桌面原型，导入任意支持 Agent 规则的世界包并用自己的兼容模型 API 游玩。不安装 Qt 时，核心库、校验与固定选项 CLI 仍可照常构建。独立的 [StoryAgent Python Demo](demos/storyagent-python/README.md) 保留作早期实验，不参与 C++ 构建。
 
 ### 环境要求 / Prerequisites
 
@@ -311,6 +328,23 @@ cd talestate-cpp
 cmake -S . -B build -DSTORYFORGE_BUILD_TESTS=ON
 cmake --build build --config Release
 ```
+
+### 🖥️ 本地桌面原型 / Desktop Prototype
+
+额外安装与编译器匹配的 Qt 6 Widgets 和 Network。配置时让 CMake 找到 Qt，例如 Windows：
+
+```powershell
+cmake -S . -B build -DCMAKE_PREFIX_PATH="C:/Qt/6.x.x/mingw_64" -DSTORYFORGE_BUILD_DESKTOP=ON
+cmake --build build --config Release
+```
+
+Windows 单配置构建可运行 `build/talestate_desktop.exe`；Visual Studio 多配置构建可运行 `build/Release/talestate_desktop.exe`。如果启动时找不到 Qt DLL，请将对应 Qt `bin` 目录加入本次终端的 `PATH`，或使用 Qt 的部署工具。其他平台运行对应构建目录下的 `talestate_desktop`。
+
+核心项目代码仍采用 MIT；Qt 是可选的外部依赖。将桌面程序与 Qt 库一起发布前，应按 [Qt 官方许可说明](https://doc.qt.io/qt-6/licensing.html)核对所用 Qt 版本及分发义务。
+
+在界面中导入 [钟塔学院](examples/clockwork-academy/story.json) 或 [雾港](examples/harbor-lantern/story.json) 的 `story.json`，输入自己的兼容 API 地址、Key、模型名，再用自然语言行动。API Key 不保存到文件，也不会出现在世界包与日志中；它会随请求发送给**你填写的**模型服务。请只使用你信任的 HTTPS 服务（本机模型服务可用 localhost HTTP）。当前没有存档，关闭程序会丢失游玩进度。
+
+Agent 可组合世界包中声明的行动能力，并在 C++ 检查失败时重试一次。自由文字不代表可以任意改写世界；未声明的状态变化不会被提交。模型生成的叙述仍可能有表达错误，左侧权威状态才是游戏事实。
 
 ### 3️⃣ 验证示例剧情 / Validate the Example
 
@@ -384,8 +418,13 @@ ctest --test-dir build -C Release --output-on-failure
 - 条件不足时拒绝行动，状态不变化
 - 后续效果失败时整轮回滚、整数溢出保护和场景跳转
 - 金币扣减、NPC 记忆、事件条件与跨章节推进
+- 两个不同世界共用一套 Agent 行动执行逻辑
+- 非法行动和模型无效输出不会修改权威状态
+- 多个授权行动的原子组合、失败修复与事实回退叙述
+- 可选 Qt 桌面启动和本机 HTTP 传输测试
+- 两个不同世界共用 `move` / `talk` 协议、失败整轮回滚与 Agent 修复测试
 
-当前基线：**25/25 测试通过**。
+当前基线：**32 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和本机网络传输测试，本机合计 **34/34 通过**。
 
 其中模型接口测试使用内存中的假网络传输，不会读取真实 API Key、访问外部服务或产生模型费用。
 
@@ -411,7 +450,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 完整字段定义见 [Story Package v1 格式说明](docs/format/story-package-v1.md) 和 [JSON Schema](schemas/story-package-v1.schema.json)。请注意：上面的片段只展示顶层形状，空章节数组不能通过语义校验；可运行示例请参考 [Clockwork Academy](examples/clockwork-academy/story.json)。
 
-Story Package v1 目前以固定节点和显式选择验证加载、引用与规则边界。它是 Agent 运行时的安全基础，而不是最终玩法上限。后续格式会进一步区分世界事实、剧情锚点、结局条件、权威状态与 Agent 候选事件，让中间剧情可以根据玩家自由行动动态发展。
+Story Package v1 同时支持传统固定选项、`agent_actions` 授权行动，以及 `agent_routes` / `agent_npcs` 支撑的通用移动与交谈。玩家可以自由输入文字，由 Agent 提出带类型和目标的行动；C++ 引擎核对世界规则后才提交。这不是无限制的状态编辑。后续格式会进一步区分世界事实、剧情锚点、动态结局条件与 Agent 候选事件。
 
 ---
 

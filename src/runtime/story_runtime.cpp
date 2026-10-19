@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <set>
 #include <type_traits>
 #include <utility>
 
@@ -169,6 +170,16 @@ std::optional<RuntimeError> apply_effect(const StoryPackage& package, StoryState
             events.push_back({"npc_memory_written", value.npc.value() + " 记住了 " + value.key});
             return std::nullopt;
         },
+        [&](const ModifyNpcRelationshipEffect& value) -> std::optional<RuntimeError> {
+            auto& score = candidate.npc_relationships[value.npc];
+            std::int64_t result{};
+            if (!checked_add(score, value.amount, result))
+                return error(RuntimeErrorCode::arithmetic_overflow, "NPC relationship overflow");
+            score = result;
+            events.push_back({"npc_relationship_changed",
+                              value.npc.value() + " 的关系值现为 " + std::to_string(result)});
+            return std::nullopt;
+        },
         [&](const CompleteEventEffect& value) -> std::optional<RuntimeError> {
             candidate.completed_events.insert(value.event);
             events.push_back({"event_completed", "事件 " + value.event.value() + " 已完成"});
@@ -228,6 +239,11 @@ bool evaluate_condition(const StoryCondition& condition, const StoryState& state
             const auto memory = npc->second.find(value.key);
             return memory != npc->second.end() && memory->second == value.value;
         },
+        [&](const NpcRelationshipCondition& value) {
+            const auto found = state.npc_relationships.find(value.npc);
+            const auto score = found == state.npc_relationships.end() ? 0 : found->second;
+            return compare_ordered(score, value.op, value.value);
+        },
         [&](const AllCondition& value) {
             return std::all_of(value.conditions.begin(), value.conditions.end(),
                                [&](const ConditionPtr& part) {
@@ -253,40 +269,38 @@ bool choice_is_available(const StoryChoice& choice, const StoryState& state) {
                        });
 }
 
-CommandResult execute_command(const StoryPackage& package, StoryState& state,
-                              const StoryCommand& command) {
+namespace {
+
+CommandResult execute_choice(const StoryPackage& package, StoryState& state,
+                             const StoryChoice& choice) {
     const auto* node = current_node(package, state);
     if (node == nullptr)
         return error(RuntimeErrorCode::invalid_position, "当前位置不存在");
     if (node->terminal)
         return error(RuntimeErrorCode::story_finished, "故事已经结束");
-    const auto found = std::find_if(node->choices.begin(), node->choices.end(),
-                                    [&](const StoryChoice& choice) { return choice.id == command.choice; });
-    if (found == node->choices.end())
-        return error(RuntimeErrorCode::unknown_choice, "当前没有这个选项");
-    if (!choice_is_available(*found, state))
+    if (!choice_is_available(choice, state))
         return error(RuntimeErrorCode::condition_unmet, "行动条件未满足");
     if (state.turn == std::numeric_limits<std::uint64_t>::max())
         return error(RuntimeErrorCode::arithmetic_overflow, "回合计数已达到上限");
 
-    const auto position_effects = std::count_if(found->effects.begin(), found->effects.end(),
+    const auto position_effects = std::count_if(choice.effects.begin(), choice.effects.end(),
         [](const StoryEffect& effect) {
             return std::holds_alternative<SwitchSceneEffect>(effect.data) ||
                    std::holds_alternative<AdvanceChapterEffect>(effect.data);
         });
-    if (position_effects + static_cast<int>(found->target_node.has_value()) > 1)
+    if (position_effects + static_cast<int>(choice.target_node.has_value()) > 1)
         return error(RuntimeErrorCode::invalid_effect, "一个选项不能同时跳转到多个位置");
 
     StoryState candidate = state;
     std::vector<StoryEvent> events;
-    for (const auto& effect : found->effects) {
+    for (const auto& effect : choice.effects) {
         if (auto failure = apply_effect(package, candidate, effect, events)) return *failure;
     }
-    if (found->target_node) {
+    if (choice.target_node) {
         const auto* scene = current_scene(package, state);
-        if (scene == nullptr || find_node(*scene, *found->target_node) == nullptr)
+        if (scene == nullptr || find_node(*scene, *choice.target_node) == nullptr)
             return error(RuntimeErrorCode::invalid_effect, "目标节点不存在");
-        candidate.position.node = *found->target_node;
+        candidate.position.node = *choice.target_node;
     }
     ++candidate.turn;
 
@@ -295,6 +309,110 @@ CommandResult execute_command(const StoryPackage& package, StoryState& state,
     static_assert(std::is_nothrow_swappable_v<StoryState>);
     swap(state, candidate);
     return delta;
+}
+
+} // namespace
+
+CommandResult execute_command(const StoryPackage& package, StoryState& state,
+                              const StoryCommand& command) {
+    const auto* node = current_node(package, state);
+    if (node == nullptr)
+        return error(RuntimeErrorCode::invalid_position, "当前位置不存在");
+    if (node->terminal)
+        return error(RuntimeErrorCode::story_finished, "故事已经结束");
+    const auto found = std::find_if(node->choices.begin(), node->choices.end(),
+        [&](const StoryChoice& choice) { return choice.id == command.choice; });
+    if (found == node->choices.end())
+        return error(RuntimeErrorCode::unknown_choice, "当前没有这个选项");
+    return execute_choice(package, state, *found);
+}
+
+CommandResult execute_agent_requests(const StoryPackage& package, StoryState& state,
+                                     const std::vector<AgentActionRequest>& actions) {
+    const auto* node = current_node(package, state);
+    if (node == nullptr)
+        return error(RuntimeErrorCode::invalid_position, "当前位置不存在");
+    if (node->terminal)
+        return error(RuntimeErrorCode::story_finished, "故事已经结束");
+    if (package.agent_actions.empty() && package.agent_routes.empty() && package.agent_npcs.empty())
+        return error(RuntimeErrorCode::invalid_effect, "该世界未声明 Agent 行动规则");
+    if (actions.size() > 3)
+        return error(RuntimeErrorCode::invalid_effect, "一回合最多执行三个行动");
+    if (state.turn == std::numeric_limits<std::uint64_t>::max())
+        return error(RuntimeErrorCode::arithmetic_overflow, "回合计数已达到上限");
+
+    StoryState candidate = state;
+    std::vector<StoryEvent> events;
+    std::set<ChoiceId> seen;
+    for (const auto& request : actions) {
+        const auto* current = current_node(package, candidate);
+        if (current == nullptr)
+            return error(RuntimeErrorCode::invalid_position, "当前位置不存在");
+        if (current->terminal)
+            return error(RuntimeErrorCode::story_finished, "故事已经结束");
+        if (request.kind == AgentActionKind::authored) {
+            if (!request.topic.empty())
+                return error(RuntimeErrorCode::invalid_effect, "预设行动不接受话题参数");
+            const ChoiceId action_id{request.target};
+            if (!seen.insert(action_id).second)
+                return error(RuntimeErrorCode::invalid_effect, "同一回合不能重复执行同一行动");
+            const auto found = std::find_if(package.agent_actions.begin(), package.agent_actions.end(),
+                [&](const AgentAction& action) { return action.id == action_id; });
+            if (found == package.agent_actions.end())
+                return error(RuntimeErrorCode::unknown_choice, "Agent 提出了未授权的行动：" + request.target);
+            const StoryChoice choice{found->id, found->text, found->conditions,
+                                     found->effects, found->target_node};
+            auto result = execute_choice(package, candidate, choice);
+            if (auto* failure = std::get_if<RuntimeError>(&result)) return *failure;
+            const auto& delta = std::get<StoryDelta>(result);
+            events.insert(events.end(), delta.events.begin(), delta.events.end());
+            candidate.turn = state.turn;
+        } else if (request.kind == AgentActionKind::move) {
+            if (!request.topic.empty())
+                return error(RuntimeErrorCode::invalid_effect, "移动行动不接受话题参数");
+            const auto found = std::find_if(package.agent_routes.begin(), package.agent_routes.end(),
+                [&](const AgentRoute& route) {
+                    return route.from == candidate.position.scene && route.to.value() == request.target;
+                });
+            if (found == package.agent_routes.end())
+                return error(RuntimeErrorCode::condition_unmet, "当前地点没有通往目标场景的路线：" + request.target);
+            if (!std::all_of(found->conditions.begin(), found->conditions.end(),
+                [&](const StoryCondition& condition) { return evaluate_condition(condition, candidate); }))
+                return error(RuntimeErrorCode::condition_unmet, "通往目标场景的路线条件未满足：" + request.target);
+            if (auto failure = apply_effect(package, candidate,
+                    StoryEffect{SwitchSceneEffect{found->to}}, events)) return *failure;
+        } else if (request.kind == AgentActionKind::talk) {
+            if (request.topic.empty() || request.topic.size() > 256 ||
+                std::any_of(request.topic.begin(), request.topic.end(), [](unsigned char ch) { return ch < 0x20; }))
+                return error(RuntimeErrorCode::invalid_effect, "交谈话题须为 1–256 字节的单行文字");
+            const auto found = std::find_if(package.agent_npcs.begin(), package.agent_npcs.end(),
+                [&](const AgentNpc& npc) { return npc.id.value() == request.target; });
+            if (found == package.agent_npcs.end())
+                return error(RuntimeErrorCode::unknown_choice, "世界中不存在这个 NPC：" + request.target);
+            if (found->scene != candidate.position.scene)
+                return error(RuntimeErrorCode::condition_unmet, "这个 NPC 当前不在你所在的场景：" + request.target);
+            candidate.npc_memory[found->id]["last_discussed_topic"] = request.topic;
+            events.push_back({"npc_talked", "与 " + found->name + " 谈起：" + request.topic});
+        } else {
+            return error(RuntimeErrorCode::invalid_effect, "未知的行动类型");
+        }
+    }
+    // A composed action sequence is one player turn, even though each capability
+    // is evaluated against the candidate state left by the preceding one.
+    candidate.turn = state.turn + 1;
+    StoryDelta delta{state, candidate, std::move(events)};
+    using std::swap;
+    swap(state, candidate);
+    return delta;
+}
+
+CommandResult execute_agent_actions(const StoryPackage& package, StoryState& state,
+                                     const std::vector<ChoiceId>& actions) {
+    std::vector<AgentActionRequest> requests;
+    requests.reserve(actions.size());
+    for (const auto& action : actions)
+        requests.push_back({AgentActionKind::authored, action.value(), {}});
+    return execute_agent_requests(package, state, requests);
 }
 
 const char* to_string(RuntimeErrorCode code) noexcept {

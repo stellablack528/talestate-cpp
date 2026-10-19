@@ -4,6 +4,7 @@
 
 #include <string>
 #include <variant>
+#include <vector>
 
 namespace storyforge {
 
@@ -34,6 +35,16 @@ using CommandResult = std::variant<StoryDelta, RuntimeError>;
 // The caller receives the committed before/after snapshot and events on success.
 [[nodiscard]] CommandResult execute_command(const StoryPackage& package, StoryState& state,
                                             const StoryCommand& command);
+
+// Execute one player turn from author-approved, world-wide agent capabilities.
+// The entire sequence is atomic. An empty sequence is a narration-only turn.
+[[nodiscard]] CommandResult execute_agent_actions(const StoryPackage& package,
+    StoryState& state, const std::vector<ChoiceId>& actions);
+
+// A parameterized turn may mix author-defined actions with generic move/talk.
+// The entire sequence is validated on a private state copy and committed once.
+[[nodiscard]] CommandResult execute_agent_requests(const StoryPackage& package,
+    StoryState& state, const std::vector<AgentActionRequest>& actions);
 
 [[nodiscard]] const char* to_string(RuntimeErrorCode code) noexcept;
 

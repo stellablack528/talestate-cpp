@@ -12,6 +12,58 @@
     { "id": "var.courage", "initial": 0 },
     { "id": "var.observed-gears", "initial": false }
   ],
+  "world_context": "钟塔学院的晨钟正常只敲十二下。导师林负责封存异常钟械。玩家不能凭空拥有物品；齿轮须先观察才能用于修理。两个结局由世界状态与行动规则决定。",
+  "agent_routes": [
+    { "from": "scene.bell-hall", "to": "scene.archive-room", "conditions": [{ "type": "variable", "variable": "var.courage", "op": "gte", "value": 1 }] },
+    { "from": "scene.archive-room", "to": "scene.bell-hall", "conditions": [] }
+  ],
+  "agent_npcs": [
+    { "id": "npc.tutor-lin", "name": "导师林", "scene": "scene.bell-hall" },
+    { "id": "npc.archivist", "name": "档案员", "scene": "scene.archive-room" }
+  ],
+  "agent_actions": [
+    {
+      "id": "action.inspect-gear", "text": "观察报时鸟衔来的齿轮并收起它",
+      "conditions": [{ "type": "current_scene", "scene": "scene.bell-hall" }, { "type": "variable", "variable": "var.observed-gears", "op": "eq", "value": false }],
+      "effects": [
+        { "type": "modify_variable", "variable": "var.observed-gears", "operation": "set", "value": true },
+        { "type": "add_item", "item": "item.etched-gear", "quantity": 1 }
+      ],
+      "target_node": "node.decision"
+    },
+    {
+      "id": "action.report-tutor", "text": "向导师林报告第十三响，获得导师的信任",
+      "conditions": [{ "type": "current_scene", "scene": "scene.bell-hall" }, { "type": "variable", "variable": "var.courage", "op": "eq", "value": 0 }],
+      "effects": [
+        { "type": "modify_variable", "variable": "var.courage", "operation": "add", "value": 1 },
+        { "type": "write_npc_memory", "npc": "npc.tutor-lin", "key": "reported-the-chime", "value": true }
+      ],
+      "target_node": "node.decision"
+    },
+    {
+      "id": "action.repair-bell", "text": "使用已获得的刻痕齿轮修复晨钟",
+      "conditions": [
+        { "type": "current_scene", "scene": "scene.bell-hall" },
+        { "type": "variable", "variable": "var.observed-gears", "op": "eq", "value": true },
+        { "type": "has_item", "item": "item.etched-gear", "quantity": 1 }
+      ],
+      "effects": [
+        { "type": "remove_item", "item": "item.etched-gear", "quantity": 1 },
+        { "type": "complete_event", "event": "event.bell-repaired" }
+      ],
+      "target_node": "node.quiet-ending"
+    },
+    {
+      "id": "action.seal-bell", "text": "与导师一起封存异常晨钟",
+      "conditions": [{ "type": "current_scene", "scene": "scene.bell-hall" }, { "type": "variable", "variable": "var.courage", "op": "gte", "value": 1 }],
+      "effects": [{ "type": "complete_event", "event": "event.bell-contained" }],
+      "target_node": "node.archive-ending"
+    },
+    {
+      "id": "action.observe", "text": "观察周围、询问或尝试不会改变权威世界状态的行动",
+      "conditions": [], "effects": []
+    }
+  ],
   "chapters": [
     {
       "id": "chapter.arrival",
@@ -98,6 +150,14 @@
               "terminal": true,
               "choices": []
             }
+          ]
+        },
+        {
+          "id": "scene.archive-room",
+          "title": "钟塔档案室",
+          "entry_node": "node.archive-desk",
+          "nodes": [
+            { "id": "node.archive-desk", "text": "档案员守着厚重的钟械记录册，主钟大厅的回廊仍在身后。", "choices": [] }
           ]
         }
       ]

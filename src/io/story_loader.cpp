@@ -155,6 +155,13 @@ std::optional<StoryCondition> read_condition(const Json& json, const std::string
         const Json* raw_value = member(json, "value", path, report);
         auto value = raw_value == nullptr ? std::nullopt : read_value(*raw_value, path + "/value", report);
         if (value) return StoryCondition{NpcMemoryCondition{NpcId{npc}, key, *value}};
+    } else if (type == "npc_relationship") {
+        reject_unknown_properties(json, path, {"type", "npc", "op", "value"}, report);
+        const auto npc = NpcId{read_id(json, "npc", path, report)};
+        const auto op_text = read_string(json, "op", path, report);
+        const auto value = read_integer(json, "value", path, report);
+        if (auto op = read_compare_operator(op_text, path + "/op", report))
+            return StoryCondition{NpcRelationshipCondition{npc, *op, value}};
     } else if (type == "all" || type == "any") {
         reject_unknown_properties(json, path, {"type", "conditions"}, report);
         const Json* raw_conditions = read_array(json, "conditions", path, report);
@@ -221,6 +228,11 @@ std::optional<StoryEffect> read_effect(const Json& json, const std::string& path
         const Json* raw_value = member(json, "value", path, report);
         auto value = raw_value == nullptr ? std::nullopt : read_value(*raw_value, path + "/value", report);
         if (value) return StoryEffect{WriteNpcMemoryEffect{npc, key, *value}};
+    } else if (type == "modify_npc_relationship") {
+        reject_unknown_properties(json, path, {"type", "npc", "amount"}, report);
+        const auto npc = NpcId{read_id(json, "npc", path, report)};
+        const auto amount = read_integer(json, "amount", path, report);
+        return StoryEffect{ModifyNpcRelationshipEffect{npc, amount}};
     } else if (type == "complete_event") {
         reject_unknown_properties(json, path, {"type", "event"}, report);
         return StoryEffect{CompleteEventEffect{EventId{read_id(json, "event", path, report)}}};
@@ -304,7 +316,7 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
         return {};
     }
     StoryPackage package;
-    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters"}, report);
+    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "agent_actions", "agent_routes", "agent_npcs"}, report);
     package.format = read_string(json, "format", "", report);
     package.id = StoryId{read_id(json, "id", "", report)};
     package.title = read_string(json, "title", "", report);
@@ -333,6 +345,45 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
     if (const Json* chapters = read_array(json, "chapters", "", report)) {
         for (std::size_t i = 0; i < chapters->size(); ++i)
             package.chapters.push_back(read_chapter((*chapters)[i], "/chapters/" + std::to_string(i), report));
+    }
+    if (const auto it = json.find("world_context"); it != json.end()) {
+        if (it->is_string()) package.world_context = it->get<std::string>();
+        else type_error(report, "/world_context", "string");
+    }
+    if (const auto it = json.find("agent_actions"); it != json.end()) {
+        if (!it->is_array()) type_error(report, "/agent_actions", "array");
+        else for (std::size_t i = 0; i < it->size(); ++i) {
+            auto choice = read_choice((*it)[i], "/agent_actions/" + std::to_string(i), report);
+            package.agent_actions.push_back({std::move(choice.id), std::move(choice.text),
+                std::move(choice.conditions), std::move(choice.effects), std::move(choice.target_node)});
+        }
+    }
+    if (const auto it = json.find("agent_routes"); it != json.end()) {
+        if (!it->is_array()) type_error(report, "/agent_routes", "array");
+        else for (std::size_t i = 0; i < it->size(); ++i) {
+            const auto path = "/agent_routes/" + std::to_string(i);
+            const auto& raw = (*it)[i];
+            reject_unknown_properties(raw, path, {"from", "to", "conditions"}, report);
+            AgentRoute route{SceneId{read_id(raw, "from", path, report)},
+                             SceneId{read_id(raw, "to", path, report)}, {}};
+            if (const Json* values = read_array(raw, "conditions", path, report)) {
+                for (std::size_t j = 0; j < values->size(); ++j) {
+                    auto condition = read_condition((*values)[j], path + "/conditions/" + std::to_string(j), report);
+                    if (condition) route.conditions.push_back(std::move(*condition));
+                }
+            }
+            package.agent_routes.push_back(std::move(route));
+        }
+    }
+    if (const auto it = json.find("agent_npcs"); it != json.end()) {
+        if (!it->is_array()) type_error(report, "/agent_npcs", "array");
+        else for (std::size_t i = 0; i < it->size(); ++i) {
+            const auto path = "/agent_npcs/" + std::to_string(i);
+            const auto& raw = (*it)[i];
+            reject_unknown_properties(raw, path, {"id", "name", "scene"}, report);
+            package.agent_npcs.push_back({NpcId{read_id(raw, "id", path, report)},
+                read_string(raw, "name", path, report), SceneId{read_id(raw, "scene", path, report)}});
+        }
     }
     return package;
 }

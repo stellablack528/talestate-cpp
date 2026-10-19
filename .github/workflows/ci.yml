@@ -20,4 +20,6 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Validate example
         shell: bash
-        run: ./build/storyforge validate examples/clockwork-academy || ./build/Release/storyforge.exe validate examples/clockwork-academy
+        run: |
+          ./build/storyforge validate examples/clockwork-academy || ./build/Release/storyforge.exe validate examples/clockwork-academy
+          ./build/storyforge validate examples/harbor-lantern || ./build/Release/storyforge.exe validate examples/harbor-lantern

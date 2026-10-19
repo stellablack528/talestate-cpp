@@ -14,6 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(STORYFORGE_BUILD_TESTS "Build StoryForge tests" ON)
+option(STORYFORGE_BUILD_DESKTOP "Build the optional Qt desktop player" ON)
 
 FetchContent_Declare(
     nlohmann_json
@@ -31,6 +32,7 @@ FetchContent_MakeAvailable(nlohmann_json CLI11)
 
 add_library(storyforge
     src/agent/openai_compatible_provider.cpp
+    src/agent/story_agent.cpp
     src/io/story_loader.cpp
     src/runtime/story_runtime.cpp
     src/validation/story_validator.cpp
@@ -48,6 +50,36 @@ if(MSVC)
     target_compile_options(storyforge PRIVATE /W4 /permissive- /EHsc /utf-8)
 else()
     target_compile_options(storyforge PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+endif()
+
+if(STORYFORGE_BUILD_DESKTOP)
+    find_package(Qt6 COMPONENTS Widgets Network QUIET)
+    if(Qt6_FOUND)
+        add_executable(talestate_desktop
+            apps/talestate-desktop/main.cpp
+            apps/talestate-desktop/qt_http_transport.cpp
+        )
+        target_link_libraries(talestate_desktop PRIVATE StoryForge::storyforge Qt6::Widgets Qt6::Network)
+        target_compile_definitions(talestate_desktop PRIVATE STORYFORGE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+        if(MSVC)
+            target_compile_options(talestate_desktop PRIVATE /W4 /EHsc /utf-8)
+        else()
+            target_compile_options(talestate_desktop PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+        if(STORYFORGE_BUILD_TESTS)
+            add_test(NAME desktop_smoke COMMAND talestate_desktop --smoke-test)
+            set_tests_properties(desktop_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+            add_executable(qt_transport_tests
+                tests/qt_transport_tests.cpp
+                apps/talestate-desktop/qt_http_transport.cpp
+            )
+            target_include_directories(qt_transport_tests PRIVATE apps/talestate-desktop)
+            target_link_libraries(qt_transport_tests PRIVATE StoryForge::storyforge Qt6::Network Catch2::Catch2WithMain)
+            add_test(NAME qt_transport_loopback COMMAND qt_transport_tests)
+        endif()
+    else()
+        message(STATUS "Qt6 Widgets/Network not found; desktop player is skipped")
+    endif()
 endif()
 
 add_executable(storyforge_cli apps/storyforge-cli/main.cpp)

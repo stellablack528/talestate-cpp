@@ -201,7 +201,8 @@ ValidationReport validate_story_package(const StoryPackage& package) {
                 if (node.terminal && !node.choices.empty())
                     report.add_error("semantic.terminal_has_choices", node_path + "/choices",
                                      "terminal node must not contain choices");
-                if (!node.terminal && node.choices.empty())
+                if (!node.terminal && node.choices.empty() && package.agent_actions.empty() &&
+                    package.agent_routes.empty() && package.agent_npcs.empty())
                     report.add_warning("semantic.dead_end", node_path,
                                        "non-terminal node has no choices");
             }
@@ -241,6 +242,60 @@ ValidationReport validate_story_package(const StoryPackage& package) {
         }
     }
 
+    std::set<std::string> agent_action_ids;
+    for (std::size_t i = 0; i < package.agent_actions.size(); ++i) {
+        const auto& action = package.agent_actions[i];
+        const auto path = "/agent_actions/" + std::to_string(i);
+        require_unique(agent_action_ids, action.id.value(), path + "/id", "agent action", report);
+        for (std::size_t j = 0; j < action.conditions.size(); ++j)
+            validate_condition(action.conditions[j], path + "/conditions/" + std::to_string(j),
+                               variables, scene_ids, report);
+        for (std::size_t j = 0; j < action.effects.size(); ++j)
+            validate_effect(action.effects[j], path + "/effects/" + std::to_string(j),
+                            variables, scene_ids, chapter_ids, report);
+        const auto position_effects = std::count_if(action.effects.begin(), action.effects.end(),
+            [](const StoryEffect& effect) {
+                return std::holds_alternative<SwitchSceneEffect>(effect.data) ||
+                       std::holds_alternative<AdvanceChapterEffect>(effect.data);
+            });
+        if (position_effects + static_cast<int>(action.target_node.has_value()) > 1)
+            report.add_error("semantic.invalid_effect", path, "an action must not contain multiple position changes");
+        if (action.target_node) {
+            bool found = false;
+            for (const auto& chapter : package.chapters)
+                for (const auto& scene : chapter.scenes)
+                    found = found || find_node(scene, *action.target_node) != nullptr;
+            if (!found)
+                report.add_error("semantic.missing_reference", path + "/target_node",
+                                 "agent action target does not exist in any scene");
+        }
+    }
+
+    std::set<std::pair<std::string, std::string>> route_ids;
+    for (std::size_t i = 0; i < package.agent_routes.size(); ++i) {
+        const auto& route = package.agent_routes[i];
+        const auto path = "/agent_routes/" + std::to_string(i);
+        if (!scene_ids.contains(route.from.value()))
+            report.add_error("semantic.missing_reference", path + "/from", "unknown source scene");
+        if (!scene_ids.contains(route.to.value()))
+            report.add_error("semantic.missing_reference", path + "/to", "unknown destination scene");
+        if (route.from == route.to)
+            report.add_error("semantic.invalid_route", path, "route cannot lead to the same scene");
+        if (!route_ids.emplace(route.from.value(), route.to.value()).second)
+            report.add_error("semantic.duplicate_id", path, "duplicate agent route");
+        for (std::size_t j = 0; j < route.conditions.size(); ++j)
+            validate_condition(route.conditions[j], path + "/conditions/" + std::to_string(j),
+                               variables, scene_ids, report);
+    }
+    std::set<std::string> npc_ids;
+    for (std::size_t i = 0; i < package.agent_npcs.size(); ++i) {
+        const auto& npc = package.agent_npcs[i];
+        const auto path = "/agent_npcs/" + std::to_string(i);
+        require_unique(npc_ids, npc.id.value(), path + "/id", "agent NPC", report);
+        if (!scene_ids.contains(npc.scene.value()))
+            report.add_error("semantic.missing_reference", path + "/scene", "unknown NPC scene");
+    }
+
     const StoryChapter* entry_chapter = find_chapter(package, package.entry.chapter);
     const StoryScene* entry_scene = entry_chapter == nullptr ? nullptr : find_scene(*entry_chapter, package.entry.scene);
     const StoryNode* entry_node = entry_scene == nullptr ? nullptr : find_node(*entry_scene, package.entry.node);
@@ -265,6 +320,35 @@ ValidationReport validate_story_package(const StoryPackage& package) {
             for (const auto& choice : location.node->choices) {
                 if (choice.target_node) pending.push_back(key(location.chapter->id, location.scene->id, *choice.target_node));
                 for (const auto& effect : choice.effects) {
+                    std::visit(Overloaded{
+                        [&](const SwitchSceneEffect& value) {
+                            for (const auto& chapter : package.chapters) {
+                                if (const auto* scene = find_scene(chapter, value.scene))
+                                    pending.push_back(key(chapter.id, scene->id, scene->entry_node));
+                            }
+                        },
+                        [&](const AdvanceChapterEffect& value) {
+                            if (const auto* chapter = find_chapter(package, value.chapter)) {
+                                if (const auto* scene = find_scene(*chapter, chapter->entry_scene))
+                                    pending.push_back(key(chapter->id, scene->id, scene->entry_node));
+                            }
+                        },
+                        [](const auto&) {}
+                    }, effect.data);
+                }
+            }
+            if (location.node->terminal) continue;
+            for (const auto& route : package.agent_routes) {
+                if (route.from != location.scene->id) continue;
+                for (const auto& chapter : package.chapters) {
+                    if (const auto* destination = find_scene(chapter, route.to))
+                        pending.push_back(key(chapter.id, destination->id, destination->entry_node));
+                }
+            }
+            for (const auto& action : package.agent_actions) {
+                if (action.target_node && find_node(*location.scene, *action.target_node))
+                    pending.push_back(key(location.chapter->id, location.scene->id, *action.target_node));
+                for (const auto& effect : action.effects) {
                     std::visit(Overloaded{
                         [&](const SwitchSceneEffect& value) {
                             for (const auto& chapter : package.chapters) {
