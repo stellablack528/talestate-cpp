@@ -18,7 +18,14 @@
     { "from": "scene.archive-room", "to": "scene.bell-hall", "conditions": [] }
   ],
   "agent_npcs": [
-    { "id": "npc.tutor-lin", "name": "导师林", "scene": "scene.bell-hall" },
+    { "id": "npc.tutor-lin", "name": "导师林", "scene": "scene.bell-hall", "dialogue_rules": [
+      { "id": "topic.thirteenth-chime", "description": "向导师报告晨钟的第十三响", "reply": "我也听见了第十三响。先把钟械封存，再查报时鸟衔来的齿轮。", "conditions": [
+        { "type": "variable", "variable": "var.courage", "op": "eq", "value": 0 }
+      ], "effects": [
+        { "type": "modify_variable", "variable": "var.courage", "operation": "add", "value": 1 },
+        { "type": "write_npc_memory", "npc": "npc.tutor-lin", "key": "reported-the-chime", "value": true }
+      ] }
+    ] },
     { "id": "npc.archivist", "name": "档案员", "scene": "scene.archive-room" }
   ],
   "agent_actions": [

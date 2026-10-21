@@ -31,6 +31,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json CLI11)
 
 add_library(storyforge
+    src/agent/connection_check.cpp
     src/agent/openai_compatible_provider.cpp
     src/agent/story_agent.cpp
     src/io/story_loader.cpp

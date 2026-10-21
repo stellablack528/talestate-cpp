@@ -292,8 +292,39 @@ ValidationReport validate_story_package(const StoryPackage& package) {
         const auto& npc = package.agent_npcs[i];
         const auto path = "/agent_npcs/" + std::to_string(i);
         require_unique(npc_ids, npc.id.value(), path + "/id", "agent NPC", report);
+    }
+    for (std::size_t i = 0; i < package.agent_npcs.size(); ++i) {
+        const auto& npc = package.agent_npcs[i];
+        const auto path = "/agent_npcs/" + std::to_string(i);
         if (!scene_ids.contains(npc.scene.value()))
             report.add_error("semantic.missing_reference", path + "/scene", "unknown NPC scene");
+        std::set<std::string> topic_ids;
+        for (std::size_t j = 0; j < npc.dialogue_rules.size(); ++j) {
+            const auto& rule = npc.dialogue_rules[j];
+            const auto rule_path = path + "/dialogue_rules/" + std::to_string(j);
+            require_unique(topic_ids, rule.id, rule_path + "/id", "NPC dialogue topic", report);
+            if (rule.id.empty() || rule.description.empty() || rule.reply.empty())
+                report.add_error("semantic.invalid_dialogue", rule_path,
+                                 "dialogue id, description, and reply must not be empty");
+            for (std::size_t k = 0; k < rule.conditions.size(); ++k)
+                validate_condition(rule.conditions[k], rule_path + "/conditions/" + std::to_string(k),
+                                   variables, scene_ids, report);
+            for (std::size_t k = 0; k < rule.effects.size(); ++k) {
+                const auto& effect = rule.effects[k];
+                const auto effect_path = rule_path + "/effects/" + std::to_string(k);
+                validate_effect(effect, effect_path, variables, scene_ids, chapter_ids, report);
+                if (const auto* memory = std::get_if<WriteNpcMemoryEffect>(&effect.data);
+                    memory && !npc_ids.contains(memory->npc.value()))
+                    report.add_error("semantic.missing_reference", effect_path + "/npc", "unknown NPC");
+                if (const auto* relationship = std::get_if<ModifyNpcRelationshipEffect>(&effect.data);
+                    relationship && !npc_ids.contains(relationship->npc.value()))
+                    report.add_error("semantic.missing_reference", effect_path + "/npc", "unknown NPC");
+                if (std::holds_alternative<SwitchSceneEffect>(effect.data) ||
+                    std::holds_alternative<AdvanceChapterEffect>(effect.data))
+                    report.add_error("semantic.invalid_dialogue", effect_path,
+                                     "dialogue cannot change player position");
+            }
+        }
     }
 
     const StoryChapter* entry_chapter = find_chapter(package, package.entry.chapter);

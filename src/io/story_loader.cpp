@@ -380,9 +380,36 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
         else for (std::size_t i = 0; i < it->size(); ++i) {
             const auto path = "/agent_npcs/" + std::to_string(i);
             const auto& raw = (*it)[i];
-            reject_unknown_properties(raw, path, {"id", "name", "scene"}, report);
-            package.agent_npcs.push_back({NpcId{read_id(raw, "id", path, report)},
-                read_string(raw, "name", path, report), SceneId{read_id(raw, "scene", path, report)}});
+            reject_unknown_properties(raw, path, {"id", "name", "scene", "dialogue_rules"}, report);
+            AgentNpc npc{NpcId{read_id(raw, "id", path, report)},
+                read_string(raw, "name", path, report), SceneId{read_id(raw, "scene", path, report)}, {}};
+            if (const auto rules = raw.is_object() ? raw.find("dialogue_rules") : raw.end();
+                rules != raw.end()) {
+                if (!rules->is_array()) type_error(report, path + "/dialogue_rules", "array");
+                else for (std::size_t j = 0; j < rules->size(); ++j) {
+                    const auto rule_path = path + "/dialogue_rules/" + std::to_string(j);
+                    const auto& rule_raw = (*rules)[j];
+                    reject_unknown_properties(rule_raw, rule_path,
+                        {"id", "description", "reply", "conditions", "effects"}, report);
+                    AgentDialogueRule rule{read_id(rule_raw, "id", rule_path, report),
+                        read_string(rule_raw, "description", rule_path, report),
+                        read_string(rule_raw, "reply", rule_path, report), {}, {}};
+                    if (const Json* values = read_array(rule_raw, "conditions", rule_path, report)) {
+                        for (std::size_t k = 0; k < values->size(); ++k) {
+                            auto condition = read_condition((*values)[k], rule_path + "/conditions/" + std::to_string(k), report);
+                            if (condition) rule.conditions.push_back(std::move(*condition));
+                        }
+                    }
+                    if (const Json* values = read_array(rule_raw, "effects", rule_path, report)) {
+                        for (std::size_t k = 0; k < values->size(); ++k) {
+                            auto effect = read_effect((*values)[k], rule_path + "/effects/" + std::to_string(k), report);
+                            if (effect) rule.effects.push_back(std::move(*effect));
+                        }
+                    }
+                    npc.dialogue_rules.push_back(std::move(rule));
+                }
+            }
+            package.agent_npcs.push_back(std::move(npc));
         }
     }
     return package;

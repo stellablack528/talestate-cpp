@@ -50,7 +50,19 @@
       "required": ["id", "name", "scene"],
       "properties": {
         "id": { "$ref": "#/$defs/id" }, "name": { "$ref": "#/$defs/nonEmptyString" },
-        "scene": { "$ref": "#/$defs/id" }
+        "scene": { "$ref": "#/$defs/id" },
+        "dialogue_rules": { "type": "array", "items": { "$ref": "#/$defs/dialogueRule" } }
+      }
+    },
+    "dialogueRule": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "description", "reply", "conditions", "effects"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "description": { "$ref": "#/$defs/nonEmptyString" },
+        "reply": { "$ref": "#/$defs/nonEmptyString" },
+        "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+        "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } }
       }
     },
     "condition": {

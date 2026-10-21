@@ -1,5 +1,6 @@
 #include "qt_http_transport.hpp"
 
+#include "storyforge/agent/connection_check.hpp"
 #include "storyforge/agent/story_agent.hpp"
 #include "storyforge/io/story_loader.hpp"
 
@@ -130,6 +131,24 @@ public:
         form->addRow("API 地址", base_url_);
         form->addRow("API Key", api_key_);
         form->addRow("模型", model_);
+        test_connection_button_ = new QPushButton("测试连接");
+        test_connection_button_->setObjectName("testConnectionButton");
+        test_connection_status_ = new QLabel("尚未测试连接。测试会发送一次简短请求，可能消耗少量 API 额度。");
+        test_connection_status_->setWordWrap(true);
+        test_connection_status_->setStyleSheet("font-size: 12px; color: #756a5d;");
+        form->addRow(test_connection_button_);
+        form->addRow(test_connection_status_);
+        connect(test_connection_button_, &QPushButton::clicked, this,
+                [this] { test_connection(); });
+        const auto mark_untested = [this] {
+            if (!busy_) {
+                test_connection_status_->setText("配置已更改，请重新测试连接。");
+                test_connection_status_->setStyleSheet("font-size: 12px; color: #756a5d;");
+            }
+        };
+        connect(base_url_, &QLineEdit::textChanged, this, mark_untested);
+        connect(api_key_, &QLineEdit::textChanged, this, mark_untested);
+        connect(model_, &QLineEdit::textChanged, this, mark_untested);
         auto* privacy = new QLabel("Key 不写入世界包、存档或日志；请求直达你填写的模型服务。");
         privacy->setWordWrap(true);
         privacy->setStyleSheet("font-size: 12px; color: #756a5d;");
@@ -173,6 +192,58 @@ public:
     }
 
 private:
+    [[nodiscard]] storyforge::agent::ProviderConfig provider_config() const {
+        storyforge::agent::ProviderConfig config;
+        config.base_url = base_url_->text().trimmed().toStdString();
+        config.api_key = api_key_->text().toStdString();
+        config.model = model_->text().trimmed().toStdString();
+        return config;
+    }
+
+    void set_busy(bool busy, bool checking_connection = false) {
+        busy_ = busy;
+        send_button_->setEnabled(!busy);
+        import_button_->setEnabled(!busy);
+        test_connection_button_->setEnabled(!busy);
+        base_url_->setEnabled(!busy);
+        api_key_->setEnabled(!busy);
+        model_->setEnabled(!busy);
+        send_button_->setText(busy && !checking_connection ? "Agent 正在推进…" : "推进故事 →");
+        test_connection_button_->setText(busy && checking_connection ? "连接测试中…" : "测试连接");
+    }
+
+    void test_connection() {
+        if (busy_) return;
+        const auto config = provider_config();
+        const auto issues = storyforge::agent::validate(config);
+        if (!issues.empty()) {
+            const auto& field = issues.front().field;
+            test_connection_status_->setText(field == "api_key" ? "请先填写 API Key。" :
+                field == "model" ? "请先填写模型名称。" :
+                "请填写有效的 API 地址：远程服务须使用 HTTPS，本机服务可使用 HTTP。");
+            test_connection_status_->setStyleSheet("font-size: 12px; color: #9b3d31;");
+            return;
+        }
+        set_busy(true, true);
+        test_connection_status_->setText("正在向模型服务发送简短请求，请稍候…");
+        test_connection_status_->setStyleSheet("font-size: 12px; color: #756a5d;");
+        worker_ = QThread::create([this, config] {
+            auto transport = std::make_shared<talestate_desktop::QtHttpTransport>();
+            storyforge::agent::OpenAiCompatibleProvider provider(config, transport);
+            auto result = storyforge::agent::check_connection(provider);
+            QMetaObject::invokeMethod(this, [this, result = std::move(result)] {
+                set_busy(false);
+                worker_ = nullptr;
+                test_connection_status_->setText(QString::fromStdString(result.message) +
+                    (result.connected() ? " 这不代表完整剧情流程已验证。" : ""));
+                test_connection_status_->setStyleSheet(result.connected() ?
+                    "font-size: 12px; color: #276144;" : "font-size: 12px; color: #9b3d31;");
+            }, Qt::QueuedConnection);
+        });
+        connect(worker_, &QThread::finished, worker_, &QObject::deleteLater);
+        worker_->start();
+    }
+
     void import_world() {
         const auto path = QFileDialog::getOpenFileName(this, "选择 Story Package 的 story.json", {},
                                                         "Story Package (story.json *.json)");
@@ -211,10 +282,7 @@ private:
             return;
         }
         const auto input = action_input_->toPlainText().trimmed().toStdString();
-        storyforge::agent::ProviderConfig config;
-        config.base_url = base_url_->text().trimmed().toStdString();
-        config.api_key = api_key_->text().toStdString();
-        config.model = model_->text().trimmed().toStdString();
+        const auto config = provider_config();
         const auto issues = storyforge::agent::validate(config);
         if (!issues.empty()) {
             QMessageBox::warning(this, "模型配置不完整", QString::fromStdString(issues.front().message));
@@ -224,10 +292,7 @@ private:
             QMessageBox::information(this, "写下行动", "先写下你想做什么。\n例如：我询问守门人今晚是否有人经过。");
             return;
         }
-        busy_ = true;
-        send_button_->setEnabled(false);
-        import_button_->setEnabled(false);
-        send_button_->setText("Agent 正在推进…");
+        set_busy(true);
         append_story("你", input);
         action_input_->clear();
         const auto package = *package_;
@@ -238,11 +303,8 @@ private:
             storyforge::agent::OpenAiCompatibleProvider provider(config, transport);
             auto result = agent->take_turn(package, state, input, provider);
             QMetaObject::invokeMethod(this, [this, result = std::move(result), state = std::move(state)]() mutable {
-                busy_ = false;
+                set_busy(false);
                 worker_ = nullptr;
-                send_button_->setEnabled(true);
-                import_button_->setEnabled(true);
-                send_button_->setText("推进故事 →");
                 if (auto* failure = std::get_if<storyforge::agent::AgentFailure>(&result)) {
                     append_story("系统", failure->message);
                     return;
@@ -269,6 +331,8 @@ private:
     QLabel* world_label_{};
     QPushButton* import_button_{};
     QPushButton* send_button_{};
+    QPushButton* test_connection_button_{};
+    QLabel* test_connection_status_{};
     QLineEdit* base_url_{};
     QLineEdit* api_key_{};
     QLineEdit* model_{};
@@ -282,6 +346,8 @@ private:
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     MainWindow window;
+    if (app.arguments().contains("--smoke-test") &&
+        !window.findChild<QPushButton*>("testConnectionButton")) return 1;
     window.show();
     if (app.arguments().contains("--smoke-test"))
         QTimer::singleShot(100, &app, &QCoreApplication::quit);

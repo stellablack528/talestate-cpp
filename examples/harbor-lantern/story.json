@@ -13,7 +13,15 @@
     { "from": "scene.lighthouse", "to": "scene.dock", "conditions": [] }
   ],
   "agent_npcs": [
-    { "id": "npc.alan", "name": "船夫阿澜", "scene": "scene.dock" },
+    { "id": "npc.alan", "name": "船夫阿澜", "scene": "scene.dock", "dialogue_rules": [
+      { "id": "topic.old-route", "description": "询问通往灯塔的旧航道", "reply": "退潮时沿着礁石外侧的旧航道走，就能抵达灯塔。", "conditions": [
+        { "type": "variable", "variable": "var.knows-route", "op": "eq", "value": false }
+      ], "effects": [
+        { "type": "modify_variable", "variable": "var.knows-route", "operation": "set", "value": true },
+        { "type": "modify_npc_relationship", "npc": "npc.alan", "amount": 1 },
+        { "type": "write_npc_memory", "npc": "npc.alan", "key": "shared-route", "value": true }
+      ] }
+    ] },
     { "id": "npc.keeper", "name": "守灯人", "scene": "scene.lighthouse" }
   ],
   "agent_actions": [

@@ -133,10 +133,21 @@ struct AgentRoute {
     std::vector<StoryCondition> conditions;
 };
 
+// Optional author-approved dialogue outcomes. A free-form topic without a
+// matching rule remains conversation-only and cannot change world facts.
+struct AgentDialogueRule {
+    std::string id;
+    std::string description;
+    std::string reply;
+    std::vector<StoryCondition> conditions;
+    std::vector<StoryEffect> effects;
+};
+
 struct AgentNpc {
     NpcId id;
     std::string name;
     SceneId scene;
+    std::vector<AgentDialogueRule> dialogue_rules;
 };
 
 enum class AgentActionKind { authored, move, talk };

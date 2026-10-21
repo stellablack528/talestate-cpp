@@ -6,7 +6,7 @@
 SemVer 字符串。`entry` 指向初始章节、场景和节点；`variables` 声明有类型的初始
 变量；`chapters` 保存剧情树。可选的 `world_context` 描述世界设定；可选的
 `agent_actions` 声明创作者预设的行动能力；可选的 `agent_routes` 声明场景间可走路线，
-`agent_npcs` 声明可交谈 NPC 的位置。
+`agent_npcs` 声明可交谈 NPC 的位置和可选的对话规则。
 
 所有 ID 建议使用小写 ASCII，并以命名空间前缀区分，例如 `chapter.arrival`、
 `scene.hall`。Schema 对 ID 的约束是 `^[a-z][a-z0-9_.-]*$`。
@@ -34,7 +34,7 @@ Agent 以结构化请求提交 `type`、`target` 和交谈时的 `topic`。`type
 
 - `authored`：`target` 为 `agent_actions` 中的 ID，执行创作者声明的效果。
 - `move`：`target` 为目标场景 ID；只允许沿 `agent_routes` 中从当前场景出发且条件满足的路线移动。
-- `talk`：`target` 为 `agent_npcs` 中当前场景内的 NPC ID，`topic` 为玩家讨论的话题（1–256 字节单行文字）。引擎记录该 NPC 的 `last_discussed_topic`，但不会仅凭交谈自动授予物品、好感、秘密或结局。
+- `talk`：`target` 为 `agent_npcs` 中当前场景内的 NPC ID，`topic` 为话题（1–256 字节单行文字）。普通自由话题只记录 `last_discussed_topic`；若 `topic` 精确等于该 NPC 的 `dialogue_rules[].id`，引擎先检查条件，再提交创作者批准的回复和效果。条件不满足则拒绝整个回合，不能退化成普通闲聊绕过。
 
 世界包中的声明示意：
 
@@ -43,12 +43,15 @@ Agent 以结构化请求提交 `type`、`target` 和交谈时的 `topic`。`type
   { "from": "scene.dock", "to": "scene.lighthouse", "conditions": [] }
 ],
 "agent_npcs": [
-  { "id": "npc.alan", "name": "阿澜", "scene": "scene.dock" }
+  { "id": "npc.alan", "name": "阿澜", "scene": "scene.dock", "dialogue_rules": [
+    { "id": "topic.old-route", "description": "询问旧航道", "reply": "退潮时沿礁石外侧走。",
+      "conditions": [{ "type": "variable", "variable": "var.knows-route", "op": "eq", "value": false }],
+      "effects": [{ "type": "modify_variable", "variable": "var.knows-route", "operation": "set", "value": true }] }
+  ] }
 ]
 ```
 
-例如 `{"actions":[{"type":"talk","target":"npc.alan","topic":"旧航道"},
-{"type":"authored","target":"action.ask-ferryman"},
+例如 `{"actions":[{"type":"talk","target":"npc.alan","topic":"topic.old-route"},
 {"type":"move","target":"scene.lighthouse"}]}`。一次玩家输入最多组合三个行动，
 按顺序在候选状态上检查，任何一步失败则整轮回滚。空行动列表只推进一个叙述回合，
 不改变物品、人物关系、地点等世界事实。旧版只返回行动 ID 的模型输出仍可解析为
@@ -56,6 +59,7 @@ Agent 以结构化请求提交 `type`、`target` 和交谈时的 `topic`。`type
 
 这允许不同自然语言输入在相同世界规则下组合出不同路径，但当前版本仍要求创作者
 事先声明可改变状态的行动能力、可走路线与 NPC 位置；模型不能凭空发明新物品、新规则或任意状态字段。
+对话规则的 `id` 在同一 NPC 内唯一；`description` 供 Agent 选择话题，`reply` 是创作者核准的 NPC 答复，只有执行成功才进入已提交事件。对话效果可沿用普通效果，但不能直接切换玩家场景或章节。未命中规则的话题仍可自由交谈，不过不会解锁线索或修改其他事实。生成式叙述本身尚无自动事实核查；判定线索是否真的获得，应以 C++ 提交的状态和事件为准。
 `target_node` 目标须在执行时的当前场景存在；跨场景移动使用 `agent_routes`，
 或在预设行动中使用 `switch_scene` 效果。`agent_routes` 的 `conditions` 可使用下述条件类型。
 当前 NPC 位置为静态声明，尚不支持 NPC 自主移动；结局仍可由终局节点表示，更通用的

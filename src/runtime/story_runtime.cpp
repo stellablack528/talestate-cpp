@@ -391,6 +391,22 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                 return error(RuntimeErrorCode::unknown_choice, "世界中不存在这个 NPC：" + request.target);
             if (found->scene != candidate.position.scene)
                 return error(RuntimeErrorCode::condition_unmet, "这个 NPC 当前不在你所在的场景：" + request.target);
+            const auto rule = std::find_if(found->dialogue_rules.begin(), found->dialogue_rules.end(),
+                [&](const AgentDialogueRule& value) { return value.id == request.topic; });
+            if (rule != found->dialogue_rules.end()) {
+                if (!std::all_of(rule->conditions.begin(), rule->conditions.end(),
+                    [&](const StoryCondition& condition) { return evaluate_condition(condition, candidate); }))
+                    return error(RuntimeErrorCode::condition_unmet,
+                                 "这个 NPC 此时不能透露该话题：" + request.topic);
+                for (const auto& effect : rule->effects) {
+                    if (std::holds_alternative<SwitchSceneEffect>(effect.data) ||
+                        std::holds_alternative<AdvanceChapterEffect>(effect.data))
+                        return error(RuntimeErrorCode::invalid_effect,
+                                     "NPC 对话规则不能直接移动玩家");
+                    if (auto failure = apply_effect(package, candidate, effect, events)) return *failure;
+                }
+                events.push_back({"npc_dialogue", found->name + "：" + rule->reply});
+            }
             candidate.npc_memory[found->id]["last_discussed_topic"] = request.topic;
             events.push_back({"npc_talked", "与 " + found->name + " 谈起：" + request.topic});
         } else {

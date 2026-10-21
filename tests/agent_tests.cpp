@@ -1,6 +1,7 @@
 #include "storyforge/agent/story_agent.hpp"
 #include "storyforge/io/story_loader.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -120,6 +121,79 @@ TEST_CASE("the same parameterized move and talk protocol works in both worlds") 
         REQUIRE(std::holds_alternative<storyforge::StoryDelta>(remote_talk));
         CHECK(state.npc_memory.at(storyforge::NpcId{scenario.remote_npc}).contains("last_discussed_topic"));
     }
+}
+
+TEST_CASE("author-approved NPC dialogue unlocks routes in both worlds without bypassing rules") {
+    struct Scenario {
+        std::string world, npc, topic, destination;
+    };
+    for (const auto& scenario : std::vector<Scenario>{
+        {"clockwork-academy", "npc.tutor-lin", "topic.thirteenth-chime", "scene.archive-room"},
+        {"harbor-lantern", "npc.alan", "topic.old-route", "scene.lighthouse"}}) {
+        auto package = example(scenario.world);
+        auto state = storyforge::make_initial_state(package);
+        const auto initial = state;
+
+        auto ordinary = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::talk, scenario.npc, "随便聊聊"}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(ordinary));
+        CHECK(state.variables == initial.variables);
+        CHECK(state.npc_relationships.empty());
+        CHECK(state.npc_memory.at(storyforge::NpcId{scenario.npc}).at("last_discussed_topic") ==
+              storyforge::StoryValue{std::string{"随便聊聊"}});
+
+        auto blocked = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::move, scenario.destination, {}}});
+        REQUIRE(std::holds_alternative<storyforge::RuntimeError>(blocked));
+
+        const auto before_invalid = state;
+        auto rolled_back = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::talk, scenario.npc, scenario.topic},
+             {storyforge::AgentActionKind::move, "scene.nonexistent", {}}});
+        REQUIRE(std::holds_alternative<storyforge::RuntimeError>(rolled_back));
+        CHECK(state == before_invalid);
+
+        auto unlocked = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::talk, scenario.npc, scenario.topic},
+             {storyforge::AgentActionKind::move, scenario.destination, {}}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(unlocked));
+        const auto& delta = std::get<storyforge::StoryDelta>(unlocked);
+        CHECK(state.position.scene.value() == scenario.destination);
+        CHECK(state.turn == before_invalid.turn + 1);
+        CHECK(std::any_of(delta.events.begin(), delta.events.end(), [](const storyforge::StoryEvent& event) {
+            return event.type == "npc_dialogue";
+        }));
+        CHECK(state.npc_memory.at(storyforge::NpcId{scenario.npc}).contains("last_discussed_topic"));
+
+        // Returning to the NPC cannot repeat a one-time gated disclosure.
+        auto back = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::move, initial.position.scene.value(), {}}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(back));
+        const auto before_repeat = state;
+        auto repeated = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::talk, scenario.npc, scenario.topic}});
+        REQUIRE(std::holds_alternative<storyforge::RuntimeError>(repeated));
+        CHECK(state == before_repeat);
+    }
+}
+
+TEST_CASE("agent selects an NPC dialogue topic and displays the committed reply") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    FakeProvider provider;
+    provider.responses = {
+        reply(R"({"actions":[{"type":"talk","target":"npc.alan","topic":"topic.old-route"},{"type":"move","target":"scene.lighthouse"}]})"),
+        reply("你沿着雾中的石阶向灯塔走去。")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "问阿澜旧航道怎么走，然后去灯塔", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    CHECK(state.position.scene == storyforge::SceneId{"scene.lighthouse"});
+    CHECK(state.variables.at(storyforge::VariableId{"var.knows-route"}) == storyforge::StoryValue{true});
+    REQUIRE(provider.requests.size() == 2);
+    CHECK(provider.requests[0].messages.back().content.find("topic.old-route") != std::string::npos);
+    CHECK(provider.requests[1].messages.back().content.find("退潮时沿着礁石外侧") != std::string::npos);
+    CHECK(std::get<storyforge::agent::AgentTurn>(result).narration.find(
+        "[确认的对话] 船夫阿澜：退潮时沿着礁石外侧") != std::string::npos);
 }
 
 TEST_CASE("agent accepts typed requests and repairs impossible moves") {

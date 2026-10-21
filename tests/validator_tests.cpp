@@ -105,3 +105,27 @@ TEST_CASE("parameterized routes and NPC locations require real unique world refe
     CHECK_FALSE(duplicate_report.valid());
     CHECK(has_code(duplicate_report, "semantic.duplicate_id"));
 }
+
+TEST_CASE("NPC dialogue rules require unique topics and valid non-moving effects") {
+    auto duplicate = valid_package();
+    duplicate.agent_npcs.front().dialogue_rules.push_back(
+        duplicate.agent_npcs.front().dialogue_rules.front());
+    const auto duplicate_report = storyforge::validate_story_package(duplicate);
+    CHECK_FALSE(duplicate_report.valid());
+    CHECK(has_code(duplicate_report, "semantic.duplicate_id"));
+
+    auto invalid = valid_package();
+    invalid.agent_npcs.front().dialogue_rules.front().effects.push_back(
+        storyforge::StoryEffect{storyforge::SwitchSceneEffect{storyforge::SceneId{"scene.archive-room"}}});
+    const auto invalid_report = storyforge::validate_story_package(invalid);
+    CHECK_FALSE(invalid_report.valid());
+    CHECK(has_code(invalid_report, "semantic.invalid_dialogue"));
+
+    auto unknown_npc = valid_package();
+    unknown_npc.agent_npcs.front().dialogue_rules.front().effects.push_back(
+        storyforge::StoryEffect{storyforge::WriteNpcMemoryEffect{
+            storyforge::NpcId{"npc.nonexistent"}, "shared-secret", true}});
+    const auto reference_report = storyforge::validate_story_package(unknown_npc);
+    CHECK_FALSE(reference_report.valid());
+    CHECK(has_code(reference_report, "semantic.missing_reference"));
+}
