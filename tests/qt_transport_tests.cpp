@@ -1,15 +1,23 @@
 #include "qt_http_transport.hpp"
 #include "storyforge/agent/connection_check.hpp"
+#include "storyforge/io/story_loader.hpp"
+#include "storyforge/io/story_save.hpp"
+#include "storyforge/runtime/story_runtime.hpp"
 
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QFile>
 #include <QHostAddress>
+#include <QSaveFile>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QTemporaryDir>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -105,4 +113,37 @@ TEST_CASE("connection check reports success and authentication failure through Q
         CHECK(received.contains("\"model\":\"loopback-model\""));
         CHECK(received.contains("POST /v1/chat/completions HTTP/1.1"));
     }
+}
+
+TEST_CASE("Qt save file persists authoritative progress across reopening") {
+    const auto path = std::filesystem::path{STORYFORGE_SOURCE_DIR} / "examples/harbor-lantern";
+    auto loaded = storyforge::load_story_package(path);
+    REQUIRE(loaded.report.valid());
+    REQUIRE(loaded.package.has_value());
+    auto state = storyforge::make_initial_state(*loaded.package);
+    auto turn = storyforge::execute_agent_requests(*loaded.package, state,
+        {{storyforge::AgentActionKind::talk, "npc.alan", "topic.old-route"}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(turn));
+    auto encoded = storyforge::serialize_story_save(*loaded.package, state);
+    REQUIRE(std::holds_alternative<std::string>(encoded));
+
+    QTemporaryDir directory;
+    REQUIRE(directory.isValid());
+    const auto filename = directory.filePath("harbor-save.json");
+    QSaveFile writer(filename);
+    REQUIRE(writer.open(QIODevice::WriteOnly));
+    const auto bytes = QByteArray::fromStdString(std::get<std::string>(encoded));
+    REQUIRE(writer.write(bytes) == bytes.size());
+    REQUIRE(writer.commit());
+
+    QFile reader(filename);
+    REQUIRE(reader.open(QIODevice::ReadOnly));
+    auto restored = storyforge::deserialize_story_save(*loaded.package,
+        reader.readAll().toStdString());
+    REQUIRE(std::holds_alternative<storyforge::StoryState>(restored));
+    auto resumed = std::get<storyforge::StoryState>(std::move(restored));
+    CHECK(resumed == state);
+    auto moved = storyforge::execute_agent_requests(*loaded.package, resumed,
+        {{storyforge::AgentActionKind::move, "scene.lighthouse", {}}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(moved));
 }

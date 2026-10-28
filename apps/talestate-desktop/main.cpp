@@ -3,6 +3,7 @@
 #include "storyforge/agent/connection_check.hpp"
 #include "storyforge/agent/story_agent.hpp"
 #include "storyforge/io/story_loader.hpp"
+#include "storyforge/io/story_save.hpp"
 
 #include <memory>
 #include <optional>
@@ -11,6 +12,7 @@
 #include <variant>
 
 #include <QApplication>
+#include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -20,6 +22,7 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QPushButton>
+#include <QSaveFile>
 #include <QSplitter>
 #include <QTextBrowser>
 #include <QTextEdit>
@@ -116,8 +119,18 @@ public:
         import_button_ = new QPushButton("导入世界包 story.json");
         world_layout->addWidget(world_label_);
         world_layout->addWidget(import_button_);
+        auto* save_row = new QHBoxLayout;
+        save_button_ = new QPushButton("保存进度");
+        save_button_->setObjectName("saveProgressButton");
+        continue_button_ = new QPushButton("继续游戏");
+        continue_button_->setObjectName("continueGameButton");
+        save_row->addWidget(save_button_);
+        save_row->addWidget(continue_button_);
+        world_layout->addLayout(save_row);
         left_layout->addWidget(world_group);
         connect(import_button_, &QPushButton::clicked, this, [this] { import_world(); });
+        connect(save_button_, &QPushButton::clicked, this, [this] { save_game(); });
+        connect(continue_button_, &QPushButton::clicked, this, [this] { continue_game(); });
 
         auto* provider_group = new QGroupBox("你的模型 · BYOK");
         auto* form = new QFormLayout(provider_group);
@@ -149,7 +162,7 @@ public:
         connect(base_url_, &QLineEdit::textChanged, this, mark_untested);
         connect(api_key_, &QLineEdit::textChanged, this, mark_untested);
         connect(model_, &QLineEdit::textChanged, this, mark_untested);
-        auto* privacy = new QLabel("Key 不写入世界包、存档或日志；请求直达你填写的模型服务。");
+        auto* privacy = new QLabel("模型配置中的 Key 不写入世界包、存档或日志；请求直达你填写的模型服务。");
         privacy->setWordWrap(true);
         privacy->setStyleSheet("font-size: 12px; color: #756a5d;");
         form->addRow(privacy);
@@ -204,6 +217,8 @@ private:
         busy_ = busy;
         send_button_->setEnabled(!busy);
         import_button_->setEnabled(!busy);
+        save_button_->setEnabled(!busy);
+        continue_button_->setEnabled(!busy);
         test_connection_button_->setEnabled(!busy);
         base_url_->setEnabled(!busy);
         api_key_->setEnabled(!busy);
@@ -271,6 +286,62 @@ private:
         state_view_->setPlainText(state_summary(*package_, state_));
     }
 
+    void save_game() {
+        if (busy_) return;
+        if (!package_) {
+            QMessageBox::information(this, "先导入世界", "请先导入要游玩的世界包，再保存进度。");
+            return;
+        }
+        const auto encoded = storyforge::serialize_story_save(*package_, state_);
+        if (const auto* failure = std::get_if<storyforge::SaveError>(&encoded)) {
+            QMessageBox::warning(this, "无法保存", QString::fromStdString(failure->message));
+            return;
+        }
+        const auto path = QFileDialog::getSaveFileName(this, "保存游戏进度",
+            QString::fromStdString(package_->id.value()) + "-save.json", "TaleState 存档 (*.json)");
+        if (path.isEmpty()) return;
+        const auto bytes = QByteArray::fromStdString(std::get<std::string>(encoded));
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+            QMessageBox::warning(this, "保存失败", "无法写入存档文件；已有存档未被替换。请检查文件位置和权限。");
+            return;
+        }
+        append_story("系统", "进度已保存。存档不包含模型配置中的 API Key；下次请先导入同一 ID 和版本的世界包，再点击“继续游戏”。");
+    }
+
+    void continue_game() {
+        if (busy_) return;
+        if (!package_) {
+            QMessageBox::information(this, "先导入世界", "请先导入创建存档时使用的世界包，再点击“继续游戏”。");
+            return;
+        }
+        const auto path = QFileDialog::getOpenFileName(this, "选择 TaleState 存档", {},
+                                                        "TaleState 存档 (*.json)");
+        if (path.isEmpty()) return;
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            QMessageBox::warning(this, "读取失败", "无法读取这个存档文件，当前进度未改变。");
+            return;
+        }
+        const auto bytes = file.read(static_cast<qint64>(storyforge::max_story_save_bytes) + 1);
+        if (bytes.size() > static_cast<qint64>(storyforge::max_story_save_bytes) || file.error() != QFile::NoError) {
+            QMessageBox::warning(this, "读取失败", "存档过大或读取失败，当前进度未改变。");
+            return;
+        }
+        const auto decoded = storyforge::deserialize_story_save(*package_, bytes.toStdString());
+        if (const auto* failure = std::get_if<storyforge::SaveError>(&decoded)) {
+            QMessageBox::warning(this, "无法继续游戏", QString::fromStdString(failure->message));
+            return;
+        }
+        state_ = std::get<storyforge::StoryState>(decoded);
+        agent_ = std::make_shared<storyforge::agent::StoryAgent>();
+        action_input_->clear();
+        story_view_->clear();
+        append_story("系统", "已恢复世界进度。之前的聊天文字不会恢复，但地点、物品和剧情事实已恢复。模型配置不会从存档恢复。");
+        append_story("世界", storyforge::current_node(*package_, state_)->text);
+        state_view_->setPlainText(state_summary(*package_, state_));
+    }
+
     void append_story(const QString& speaker, const std::string& text) {
         story_view_->append("<p><strong>" + speaker.toHtmlEscaped() + "</strong><br>" +
                             safe(text).replace("\n", "<br>") + "</p>");
@@ -330,6 +401,8 @@ private:
     bool busy_{false};
     QLabel* world_label_{};
     QPushButton* import_button_{};
+    QPushButton* save_button_{};
+    QPushButton* continue_button_{};
     QPushButton* send_button_{};
     QPushButton* test_connection_button_{};
     QLabel* test_connection_status_{};
@@ -347,7 +420,9 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     MainWindow window;
     if (app.arguments().contains("--smoke-test") &&
-        !window.findChild<QPushButton*>("testConnectionButton")) return 1;
+        (!window.findChild<QPushButton*>("testConnectionButton") ||
+         !window.findChild<QPushButton*>("saveProgressButton") ||
+         !window.findChild<QPushButton*>("continueGameButton"))) return 1;
     window.show();
     if (app.arguments().contains("--smoke-test"))
         QTimer::singleShot(100, &app, &QCoreApplication::quit);

@@ -18,7 +18,7 @@
 
 项目追求的不是无限制的 AI 即兴创作，而是**受约束的生成式叙事（Constrained Generative Narrative）**：创作者决定世界与命运的边界，Agent 创造旅途中的道路，玩家决定如何行动，引擎保证世界规则始终可信。
 
-当前版本提供两种入口：命令行的固定选项玩法，以及可选构建的 **Qt 本地桌面原型**。桌面原型支持导入带 Agent 规则的世界包、填写自己的兼容模型 API、自然语言输入、Agent 规划与修复、C++ 权威状态裁决和生成式叙述。通用行动协议 v1 支持带参数的跨场景移动与 NPC 交谈；示例包含钟塔学院与雾港两个不同世界。它仍是早期工具：路线、NPC 所在地及其他改变事实的效果需要创作者声明，完整可视化世界编辑器、存档和更开放的动态事件规则尚未实现。
+当前版本提供两种入口：命令行的固定选项玩法，以及可选构建的 **Qt 本地桌面原型**。桌面原型支持导入带 Agent 规则的世界包、填写自己的兼容模型 API、自然语言输入、Agent 规划与修复、C++ 权威状态裁决、生成式叙述以及手动存档／读档。通用行动协议 v1 支持带参数的跨场景移动与 NPC 交谈；示例包含钟塔学院与雾港两个不同世界。它仍是早期工具：路线、NPC 所在地及其他改变事实的效果需要创作者声明，完整可视化世界编辑器、聊天记录恢复和更开放的动态事件规则尚未实现。
 
 ### English
 
@@ -30,7 +30,7 @@ The goal is constrained generative narrative rather than unrestricted AI improvi
 
 TaleState uses a BYOK model: users supply the endpoint, API key, and model of a compatible service. TaleState supplies the RPG-specific agent workflow, structured actions, validation, repair, and memory strategy, so model choice does not define the rules of the world.
 
-The current release also includes an optional Qt desktop prototype: import a world package, enter an OpenAI-compatible endpoint/key/model, type free-form actions, and see model planning, repair, narration, and C++-committed state. A parameterized action protocol supports rule-checked movement and NPC conversation across two distinct example worlds. Routes, NPC placement, and other state-changing capabilities remain author-declared; visual authoring, saves, and richer dynamic events remain future work.
+The current release also includes an optional Qt desktop prototype: import a world package, enter an OpenAI-compatible endpoint/key/model, type free-form actions, and see model planning, repair, narration, and C++-committed state. Manual saves restore authoritative world state without storing credentials or chat history. A parameterized action protocol supports rule-checked movement and NPC conversation across two distinct example worlds. Routes, NPC placement, and other state-changing capabilities remain author-declared; visual authoring and richer dynamic events remain future work.
 
 ---
 
@@ -79,6 +79,7 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 📐 机器可读规范 | 提供 Story Package v1 JSON Schema 和对应格式说明 |
 | 🔑 BYOK 接入 | 在桌面原型中输入自己的 API 地址、Key 和模型名称；Key 仅保留在本次运行内存中 |
 | 🔎 测试连接 | 无须先导入世界包，即可发送一次简短请求，检查基础对话连接并区分网络、认证、模型／接口等常见错误 |
+| 💾 手动存档／读档 | 保存并恢复地点、回合、金币、背包、变量、NPC 记忆与关系、已发生事件；校验世界包 ID／版本，不保存 API Key |
 | 🖥️ 本地桌面原型 | 导入带 Agent 规则的世界包，配置自己的模型，在界面中自由输入并查看剧情和权威状态 |
 | 🧭 Agent 规则组合 | 通过自然语言选择并组合创作者授权的行动，不必预写每条完整剧情路线 |
 | 🚶 通用行动协议 v1 | 用同一套 `move` / `talk` 请求在不同世界移动与交谈；非法目标、封锁路线和不在场的 NPC 都会被拒绝 |
@@ -276,6 +277,7 @@ talestate-cpp/
 - [x] 可选 Qt 本地界面与真实 HTTPS 传输
 - [x] 导入世界包、BYOK 配置、自由文字输入和权威状态展示
 - [x] 无需世界包的独立“测试连接”按钮与安全错误分类
+- [x] Qt 手动存档／读档及世界包 ID／版本校验
 
 ### 🚧 下一阶段 / Next Phase
 
@@ -296,7 +298,7 @@ talestate-cpp/
 - [ ] 动态场景、线索、冲突与世界事件生成
 - [ ] 自动模拟、死路、状态矛盾和结局可达性诊断
 - [ ] 内存状态存储与 SQLite 持久化
-- [ ] 存档版本和迁移机制
+- [ ] 跨世界包版本的存档迁移机制
 - [ ] 创作者界面：定义世界、规则、剧情锚点和结局
 - [ ] 玩家界面中的存档、回放与可视化关系图
 - [x] Qt 本地宿主原型
@@ -345,7 +347,7 @@ Windows 单配置构建可运行 `build/talestate_desktop.exe`；Visual Studio �
 
 核心项目代码仍采用 MIT；Qt 是可选的外部依赖。将桌面程序与 Qt 库一起发布前，应按 [Qt 官方许可说明](https://doc.qt.io/qt-6/licensing.html)核对所用 Qt 版本及分发义务。
 
-先在界面中填写兼容 API 地址、Key 和模型名，可直接点击“测试连接”，不需要导入世界包。它会向你填写的服务发送一次简短对话请求，**可能消耗少量 API 额度**；成功只证明基础对话可用，不保证剧情规划、JSON 模式或叙述质量。随后导入 [钟塔学院](examples/clockwork-academy/story.json) 或 [雾港](examples/harbor-lantern/story.json) 的 `story.json`，用自然语言行动。API Key 不保存到文件，也不会出现在世界包与日志中；它会随请求发送给**你填写的**模型服务。请只使用你信任的 HTTPS 服务（本机模型服务可用 localhost HTTP）。当前没有存档，关闭程序会丢失游玩进度。
+先在界面中填写兼容 API 地址、Key 和模型名，可直接点击“测试连接”，不需要导入世界包。它会向你填写的服务发送一次简短对话请求，**可能消耗少量 API 额度**；成功只证明基础对话可用，不保证剧情规划、JSON 模式或叙述质量。随后导入 [钟塔学院](examples/clockwork-academy/story.json) 或 [雾港](examples/harbor-lantern/story.json) 的 `story.json`，用自然语言行动。需要暂停时点击“保存进度”选择存档位置；下次打开程序后，**先导入同一 ID 和版本的世界包**，再点击“继续游戏”选择存档。存档只恢复权威世界状态，不恢复聊天文字和 Agent 最近回合摘要；模型地址、名称和 API Key 也不会写入存档，需要重新填写。API Key 不会出现在世界包与日志中；它会随请求发送给**你填写的**模型服务。请只使用你信任的 HTTPS 服务（本机模型服务可用 localhost HTTP）。
 
 Agent 可组合世界包中声明的行动能力，并在 C++ 检查失败时重试一次。自由文字不代表可以任意改写世界；未声明的状态变化不会被提交。模型生成的叙述仍可能有表达错误，左侧权威状态才是游戏事实。
 
@@ -428,7 +430,7 @@ ctest --test-dir build -C Release --output-on-failure
 - 两个不同世界共用 `move` / `talk` 协议、失败整轮回滚与 Agent 修复测试
 - 最小连接请求、错误分类与本机模拟服务成功／认证失败测试
 
-当前基线：**34 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和本机网络传输测试，本机合计 **36/36 通过**（网络传输测试内部覆盖正常响应和认证失败）。
+当前基线：**40 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和 Qt 集成测试，本机合计 **42/42 通过**（集成测试内部覆盖连接响应、认证失败及真实文件存取）。
 
 其中模型接口测试使用内存中的假网络传输，不会读取真实 API Key、访问外部服务或产生模型费用。
 

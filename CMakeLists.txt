@@ -35,6 +35,7 @@ add_library(storyforge
     src/agent/openai_compatible_provider.cpp
     src/agent/story_agent.cpp
     src/io/story_loader.cpp
+    src/io/story_save.cpp
     src/runtime/story_runtime.cpp
     src/validation/story_validator.cpp
 )
@@ -76,6 +77,7 @@ if(STORYFORGE_BUILD_DESKTOP)
             )
             target_include_directories(qt_transport_tests PRIVATE apps/talestate-desktop)
             target_link_libraries(qt_transport_tests PRIVATE StoryForge::storyforge Qt6::Network Catch2::Catch2WithMain)
+            target_compile_definitions(qt_transport_tests PRIVATE STORYFORGE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
             add_test(NAME qt_transport_loopback COMMAND qt_transport_tests)
         endif()
     else()
