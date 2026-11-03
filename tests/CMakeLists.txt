@@ -4,6 +4,7 @@ add_executable(storyforge_tests
     loader_tests.cpp
     provider_tests.cpp
     runtime_tests.cpp
+    replay_tests.cpp
     save_tests.cpp
     validator_tests.cpp
 )

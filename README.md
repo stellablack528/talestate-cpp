@@ -1,8 +1,8 @@
 # TaleState C++ 📖
 
-> Bring your own model. TaleState provides the RPG intelligence and deterministic C++ rule arbitration.
+> Bring your own model. The model understands and narrates; the C++ engine enforces the world's rules.
 >
-> 用户自带 API Key，即可把不同市面大模型接入同一套可靠世界规则的高自由文字 RPG Agent 引擎。
+> 用户自带 API Key，让现成大模型负责理解、规划和叙述，由 C++ 引擎维护可信的游戏世界。
 
 ---
 
@@ -11,6 +11,8 @@
 ### 中文
 
 **TaleState C++** 是一个独立的高自由度文字 RPG Agent 引擎项目。
+
+**核心分工：现成大模型理解玩家意图、规划行动并生成叙述；C++ 引擎校验世界规则、执行合法动作并维护权威游戏状态。**
 
 创作者负责定义世界观、世界规则、地点、NPC、剧情锚点以及多个结局，但不需要预先写死玩家抵达结局的每一条路线。玩家可以用自然语言自由行动；剧情 Agent 根据世界状态理解意图、扮演 NPC，并生成候选场景、事件与叙述。C++ 引擎是世界事实的唯一裁判，负责验证 Agent 提出的状态变化、原子提交合法结果，并保证物品、金币、关系、事件和结局条件不会被 AI 随意绕过。
 
@@ -23,6 +25,8 @@
 ### English
 
 **TaleState C++** is a standalone, setting- and provider-agnostic agent runtime for high-freedom text RPG worlds.
+
+**Core division of work:** an existing language model interprets player intent, plans actions, and writes narration. The C++ engine checks world rules, executes valid actions, and maintains the authoritative game state.
 
 Creators define the world, hard rules, locations, NPCs, story anchors, and possible endings without scripting every route between them. Players act through natural-language input. A narrative agent interprets intent and proposes scenes, events, NPC reactions, and narration, while the deterministic C++ engine remains the sole authority over world state and ending conditions.
 
@@ -149,7 +153,7 @@ flowchart TD
         Agent --> Provider["兼容模型服务"]
         Provider --> Agent
         Package --> Agent
-        Agent --> Candidate["授权行动 ID 列表"]
+        Agent --> Candidate["结构化候选行动"]
         Candidate --> Runtime["C++ 条件与效果引擎"]
         PlayCLI --> Runtime
         Runtime --> Delta["验证后的 StoryDelta"]
@@ -278,6 +282,7 @@ talestate-cpp/
 - [x] 导入世界包、BYOK 配置、自由文字输入和权威状态展示
 - [x] 无需世界包的独立“测试连接”按钮与安全错误分类
 - [x] Qt 手动存档／读档及世界包 ID／版本校验
+- [x] 钟塔学院与雾港的固定 Agent 剧情回放、非法行动拒绝与精确终局状态测试
 
 ### 🚧 下一阶段 / Next Phase
 
@@ -285,7 +290,7 @@ talestate-cpp/
 - [ ] API Key 的系统安全凭据存储，禁止进入配置明文、日志和存档
 - [ ] 更丰富的世界能力规则，超越当前创作者预声明的行动集合
 - [ ] 更丰富的关系状态和动态结局条件
-- [ ] 固定随机种子与黄金结果测试
+- [ ] 引入随机事件后的固定种子回放测试（当前确定性流程已有黄金结果测试）
 
 ### 📋 后续规划 / Planned
 
@@ -430,7 +435,7 @@ ctest --test-dir build -C Release --output-on-failure
 - 两个不同世界共用 `move` / `talk` 协议、失败整轮回滚与 Agent 修复测试
 - 最小连接请求、错误分类与本机模拟服务成功／认证失败测试
 
-当前基线：**40 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和 Qt 集成测试，本机合计 **42/42 通过**（集成测试内部覆盖连接响应、认证失败及真实文件存取）。
+当前基线：**42 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和 Qt 集成测试，本机合计 **44/44 通过**（集成测试内部覆盖连接响应、认证失败及真实文件存取）。
 
 其中模型接口测试使用内存中的假网络传输，不会读取真实 API Key、访问外部服务或产生模型费用。
 
