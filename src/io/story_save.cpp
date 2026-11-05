@@ -2,6 +2,7 @@
 
 #include "storyforge/runtime/story_runtime.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -72,7 +73,7 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
         {"turn", state.turn}, {"gold", state.gold},
         {"variables", Json::object()}, {"inventory", Json::object()},
         {"npc_memory", Json::object()}, {"npc_relationships", Json::object()},
-        {"completed_events", Json::array()}};
+        {"completed_events", Json::array()}, {"collected_objects", Json::array()}};
     for (const auto& [id, value] : state.variables)
         saved_state["variables"][id.value()] = value_json(value);
     for (const auto& [id, quantity] : state.inventory)
@@ -86,6 +87,8 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
         saved_state["npc_relationships"][npc.value()] = score;
     for (const auto& event : state.completed_events)
         saved_state["completed_events"].push_back(event.value());
+    for (const auto& object : state.collected_objects)
+        saved_state["collected_objects"].push_back(object);
 
     const Json save{{"format", "talestate.save/v1"},
                     {"world", {{"id", package.id.value()}, {"version", package.version}}},
@@ -117,8 +120,11 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                              "存档与当前世界包的 ID 或版本不一致，请导入原来的世界包。当前进度未改变。"};
 
         const auto& raw = save["state"];
-        if (!has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
-                              "npc_memory", "npc_relationships", "completed_events"})) return malformed();
+        const bool current_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+                              "npc_memory", "npc_relationships", "completed_events", "collected_objects"});
+        const bool older_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+                              "npc_memory", "npc_relationships", "completed_events"});
+        if (!current_format && !older_format) return malformed();
         const auto& position = raw["position"];
         if (!has_fields(position, {"chapter", "scene", "node"}) ||
             !position["chapter"].is_string() || !position["scene"].is_string() ||
@@ -179,6 +185,18 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
             const auto id = value.get<std::string>();
             if (!valid_id(id) || !state.completed_events.emplace(EventId{id}).second)
                 return malformed();
+        }
+        if (current_format) {
+            const auto& objects = raw["collected_objects"];
+            if (!objects.is_array()) return malformed();
+            for (const auto& value : objects) {
+                if (!value.is_string()) return malformed();
+                const auto id = value.get<std::string>();
+                const auto found = std::find_if(package.agent_objects.begin(), package.agent_objects.end(),
+                    [&](const AgentObject& object) { return object.id == id && object.item.has_value(); });
+                if (!valid_id(id) || found == package.agent_objects.end() ||
+                    !state.collected_objects.insert(id).second) return malformed();
+            }
         }
         return state;
     } catch (const Json::exception&) {

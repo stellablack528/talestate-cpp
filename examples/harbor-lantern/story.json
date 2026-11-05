@@ -2,7 +2,7 @@
   "format": "storyforge.package/v1",
   "id": "harbor-lantern",
   "title": "雾港：失踪的航灯",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "entry": { "chapter": "chapter.fog", "scene": "scene.dock", "node": "node.arrival" },
   "variables": [
     { "id": "var.knows-route", "initial": false }
@@ -11,6 +11,10 @@
   "agent_routes": [
     { "from": "scene.dock", "to": "scene.lighthouse", "conditions": [{ "type": "variable", "variable": "var.knows-route", "op": "eq", "value": true }] },
     { "from": "scene.lighthouse", "to": "scene.dock", "conditions": [] }
+  ],
+  "agent_objects": [
+    { "id": "object.tide-chart", "name": "潮汐图", "scene": "scene.dock", "description": "图上标着退潮时可通往灯塔的礁石，但具体航道仍需向熟悉海况的人确认。" },
+    { "id": "object.shell-token", "name": "贝壳信物", "scene": "scene.dock", "description": "一枚刻着旧港徽记的贝壳信物，被遗落在码头木箱旁。", "item": "item.shell-token" }
   ],
   "agent_npcs": [
     { "id": "npc.alan", "name": "船夫阿澜", "scene": "scene.dock", "dialogue_rules": [

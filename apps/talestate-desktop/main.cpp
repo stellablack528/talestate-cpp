@@ -272,7 +272,7 @@ private:
             return;
         }
         if (loaded.package->agent_actions.empty() && loaded.package->agent_routes.empty() &&
-            loaded.package->agent_npcs.empty()) {
+            loaded.package->agent_npcs.empty() && loaded.package->agent_objects.empty()) {
             QMessageBox::warning(this, "缺少 Agent 规则",
                                  "这个世界包只有固定选项，还没有 Agent 行动规则，无法自由输入。请导入支持 Agent 的世界包。");
             return;

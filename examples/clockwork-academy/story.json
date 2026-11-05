@@ -2,7 +2,7 @@
   "format": "storyforge.package/v1",
   "id": "clockwork-academy",
   "title": "钟塔学院：失准的晨钟",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "entry": {
     "chapter": "chapter.arrival",
     "scene": "scene.bell-hall",
@@ -27,6 +27,10 @@
       ] }
     ] },
     { "id": "npc.archivist", "name": "档案员", "scene": "scene.archive-room" }
+  ],
+  "agent_objects": [
+    { "id": "object.bell-inscription", "name": "钟座铭文", "scene": "scene.bell-hall", "description": "铭文记载：晨钟原本每天只应敲响十二下。" },
+    { "id": "object.brass-button", "name": "铜制制服纽扣", "scene": "scene.bell-hall", "description": "一枚印着学院校徽的铜纽扣，落在钟座下。", "item": "item.brass-button" }
   ],
   "agent_actions": [
     {

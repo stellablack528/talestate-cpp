@@ -316,7 +316,7 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
         return {};
     }
     StoryPackage package;
-    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "agent_actions", "agent_routes", "agent_npcs"}, report);
+    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "agent_actions", "agent_routes", "agent_npcs", "agent_objects"}, report);
     package.format = read_string(json, "format", "", report);
     package.id = StoryId{read_id(json, "id", "", report)};
     package.title = read_string(json, "title", "", report);
@@ -410,6 +410,21 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
                 }
             }
             package.agent_npcs.push_back(std::move(npc));
+        }
+    }
+    if (const auto it = json.find("agent_objects"); it != json.end()) {
+        if (!it->is_array()) type_error(report, "/agent_objects", "array");
+        else for (std::size_t i = 0; i < it->size(); ++i) {
+            const auto path = "/agent_objects/" + std::to_string(i);
+            const auto& raw = (*it)[i];
+            reject_unknown_properties(raw, path, {"id", "name", "scene", "description", "item"}, report);
+            AgentObject object{read_id(raw, "id", path, report),
+                read_string(raw, "name", path, report),
+                SceneId{read_id(raw, "scene", path, report)},
+                read_string(raw, "description", path, report), std::nullopt};
+            if (raw.is_object() && raw.contains("item"))
+                object.item = ItemId{read_id(raw, "item", path, report)};
+            package.agent_objects.push_back(std::move(object));
         }
     }
     return package;

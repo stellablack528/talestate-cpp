@@ -327,6 +327,19 @@ ValidationReport validate_story_package(const StoryPackage& package) {
         }
     }
 
+    std::set<std::string> object_ids;
+    for (std::size_t i = 0; i < package.agent_objects.size(); ++i) {
+        const auto& object = package.agent_objects[i];
+        const auto path = "/agent_objects/" + std::to_string(i);
+        require_unique(object_ids, object.id, path + "/id", "agent object", report);
+        if (object.name.empty() || object.description.empty())
+            report.add_error("semantic.invalid_object", path, "object name and description must not be empty");
+        if (!scene_ids.contains(object.scene.value()))
+            report.add_error("semantic.missing_reference", path + "/scene", "unknown object scene");
+        if (object.item && object.item->empty())
+            report.add_error("semantic.invalid_object", path + "/item", "item id must not be empty");
+    }
+
     const StoryChapter* entry_chapter = find_chapter(package, package.entry.chapter);
     const StoryScene* entry_scene = entry_chapter == nullptr ? nullptr : find_scene(*entry_chapter, package.entry.scene);
     const StoryNode* entry_node = entry_scene == nullptr ? nullptr : find_node(*entry_scene, package.entry.node);

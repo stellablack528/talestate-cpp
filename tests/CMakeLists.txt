@@ -2,6 +2,7 @@ add_executable(storyforge_tests
     agent_tests.cpp
     connection_check_tests.cpp
     loader_tests.cpp
+    object_tests.cpp
     provider_tests.cpp
     runtime_tests.cpp
     replay_tests.cpp

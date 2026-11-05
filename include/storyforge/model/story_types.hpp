@@ -150,7 +150,15 @@ struct AgentNpc {
     std::vector<AgentDialogueRule> dialogue_rules;
 };
 
-enum class AgentActionKind { authored, move, talk };
+struct AgentObject {
+    std::string id;
+    std::string name;
+    SceneId scene;
+    std::string description;
+    std::optional<ItemId> item;
+};
+
+enum class AgentActionKind { authored, move, talk, inspect, take };
 
 struct AgentActionRequest {
     AgentActionKind kind{AgentActionKind::authored};
@@ -199,6 +207,7 @@ struct StoryPackage {
     std::vector<AgentAction> agent_actions;
     std::vector<AgentRoute> agent_routes;
     std::vector<AgentNpc> agent_npcs;
+    std::vector<AgentObject> agent_objects;
 };
 
 struct StoryState {
@@ -209,6 +218,7 @@ struct StoryState {
     std::map<NpcId, std::map<std::string, StoryValue>> npc_memory;
     std::map<NpcId, std::int64_t> npc_relationships;
     std::set<EventId> completed_events;
+    std::set<std::string> collected_objects;
     std::uint64_t turn{0};
 
     bool operator==(const StoryState&) const = default;

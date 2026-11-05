@@ -16,7 +16,8 @@
     "world_context": { "type": "string" },
     "agent_actions": { "type": "array", "items": { "$ref": "#/$defs/choice" } },
     "agent_routes": { "type": "array", "items": { "$ref": "#/$defs/agentRoute" } },
-    "agent_npcs": { "type": "array", "items": { "$ref": "#/$defs/agentNpc" } }
+    "agent_npcs": { "type": "array", "items": { "$ref": "#/$defs/agentNpc" } },
+    "agent_objects": { "type": "array", "items": { "$ref": "#/$defs/agentObject" } }
   },
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
@@ -52,6 +53,17 @@
         "id": { "$ref": "#/$defs/id" }, "name": { "$ref": "#/$defs/nonEmptyString" },
         "scene": { "$ref": "#/$defs/id" },
         "dialogue_rules": { "type": "array", "items": { "$ref": "#/$defs/dialogueRule" } }
+      }
+    },
+    "agentObject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "scene", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "scene": { "$ref": "#/$defs/id" },
+        "description": { "$ref": "#/$defs/nonEmptyString" },
+        "item": { "$ref": "#/$defs/id" }
       }
     },
     "dialogueRule": {

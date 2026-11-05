@@ -334,7 +334,8 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
         return error(RuntimeErrorCode::invalid_position, "当前位置不存在");
     if (node->terminal)
         return error(RuntimeErrorCode::story_finished, "故事已经结束");
-    if (package.agent_actions.empty() && package.agent_routes.empty() && package.agent_npcs.empty())
+    if (package.agent_actions.empty() && package.agent_routes.empty() &&
+        package.agent_npcs.empty() && package.agent_objects.empty())
         return error(RuntimeErrorCode::invalid_effect, "该世界未声明 Agent 行动规则");
     if (actions.size() > 3)
         return error(RuntimeErrorCode::invalid_effect, "一回合最多执行三个行动");
@@ -409,6 +410,27 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
             }
             candidate.npc_memory[found->id]["last_discussed_topic"] = request.topic;
             events.push_back({"npc_talked", "与 " + found->name + " 谈起：" + request.topic});
+        } else if (request.kind == AgentActionKind::inspect || request.kind == AgentActionKind::take) {
+            if (!request.topic.empty())
+                return error(RuntimeErrorCode::invalid_effect, "观察和拿取不接受话题参数");
+            const auto found = std::find_if(package.agent_objects.begin(), package.agent_objects.end(),
+                [&](const AgentObject& object) { return object.id == request.target; });
+            if (found == package.agent_objects.end())
+                return error(RuntimeErrorCode::unknown_choice, "世界中不存在这个对象：" + request.target);
+            if (found->scene != candidate.position.scene)
+                return error(RuntimeErrorCode::condition_unmet, "这个对象不在当前场景：" + request.target);
+            if (candidate.collected_objects.contains(found->id))
+                return error(RuntimeErrorCode::condition_unmet, "这个对象已经被拿走：" + request.target);
+            if (request.kind == AgentActionKind::inspect) {
+                events.push_back({"object_inspected", found->name + "：" + found->description});
+            } else {
+                if (!found->item)
+                    return error(RuntimeErrorCode::condition_unmet, "这个对象不能拿取：" + request.target);
+                if (auto failure = apply_effect(package, candidate,
+                        StoryEffect{AddItemEffect{*found->item, 1}}, events)) return *failure;
+                candidate.collected_objects.insert(found->id);
+                events.push_back({"object_taken", "已从场景拿走 " + found->name});
+            }
         } else {
             return error(RuntimeErrorCode::invalid_effect, "未知的行动类型");
         }
