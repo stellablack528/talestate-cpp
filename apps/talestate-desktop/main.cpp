@@ -32,6 +32,7 @@
 #include <QPen>
 #include <QBrush>
 #include <QPainter>
+#include <QComboBox>
 #include <QSaveFile>
 #include <QSplitter>
 #include <QTextBrowser>
@@ -148,16 +149,38 @@ public:
 
         auto* provider_group = new QGroupBox("你的模型 · BYOK");
         auto* form = new QFormLayout(provider_group);
+        provider_type_ = new QComboBox;
+        provider_type_->setObjectName("providerTypeSelector");
+        provider_type_->addItem("自定义 · OpenAI 兼容", "");
+        provider_type_->addItem("OpenAI", "https://api.openai.com/v1");
+        provider_type_->addItem("DeepSeek", "https://api.deepseek.com");
+        provider_type_->addItem("OpenRouter", "https://openrouter.ai/api/v1");
+        provider_type_->addItem("硅基流动 SiliconFlow", "https://api.siliconflow.cn/v1");
         base_url_ = new QLineEdit;
+        base_url_->setObjectName("providerBaseUrl");
         base_url_->setPlaceholderText("https://你的服务地址/v1");
         api_key_ = new QLineEdit;
+        api_key_->setObjectName("providerApiKey");
         api_key_->setEchoMode(QLineEdit::Password);
         api_key_->setPlaceholderText("仅在本次运行的内存中使用");
         model_ = new QLineEdit;
         model_->setPlaceholderText("模型名称");
+        form->addRow("服务商", provider_type_);
         form->addRow("API 地址", base_url_);
         form->addRow("API Key", api_key_);
         form->addRow("模型", model_);
+        auto* provider_hint = new QLabel("预设会填写官方默认地址；模型 ID 请从服务商控制台复制。也可修改地址，使用其他兼容服务。");
+        provider_hint->setWordWrap(true);
+        provider_hint->setStyleSheet("font-size: 12px; color: #756a5d;");
+        form->addRow(provider_hint);
+        connect(provider_type_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                [this](int index) {
+                    base_url_->setText(provider_type_->itemData(index).toString());
+                    api_key_->clear();
+                    model_->clear();
+                    model_->setPlaceholderText(index == 2 ? "例如 deepseek-flash" :
+                        index == 3 ? "例如 供应商/模型名称" : "从服务商控制台复制模型 ID");
+                });
         test_connection_button_ = new QPushButton("测试连接");
         test_connection_button_->setObjectName("testConnectionButton");
         test_connection_status_ = new QLabel("尚未测试连接。测试会发送一次简短请求，可能消耗少量 API 额度。");
@@ -235,6 +258,7 @@ private:
         save_button_->setEnabled(!busy);
         continue_button_->setEnabled(!busy);
         test_connection_button_->setEnabled(!busy);
+        provider_type_->setEnabled(!busy);
         base_url_->setEnabled(!busy);
         api_key_->setEnabled(!busy);
         model_->setEnabled(!busy);
@@ -514,6 +538,7 @@ private:
     QPushButton* continue_button_{};
     QPushButton* send_button_{};
     QPushButton* test_connection_button_{};
+    QComboBox* provider_type_{};
     QLabel* test_connection_status_{};
     QLineEdit* base_url_{};
     QLineEdit* api_key_{};
@@ -528,11 +553,23 @@ private:
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     MainWindow window;
-    if (app.arguments().contains("--smoke-test") &&
-        (!window.findChild<QPushButton*>("testConnectionButton") ||
-         !window.findChild<QPushButton*>("saveProgressButton") ||
-         !window.findChild<QPushButton*>("continueGameButton") ||
-         !window.findChild<QPushButton*>("generateMapButton"))) return 1;
+    if (app.arguments().contains("--smoke-test")) {
+        auto* selector = window.findChild<QComboBox*>("providerTypeSelector");
+        auto* base_url = window.findChild<QLineEdit*>("providerBaseUrl");
+        auto* api_key = window.findChild<QLineEdit*>("providerApiKey");
+        if (!window.findChild<QPushButton*>("testConnectionButton") ||
+            !window.findChild<QPushButton*>("saveProgressButton") ||
+            !window.findChild<QPushButton*>("continueGameButton") ||
+            !window.findChild<QPushButton*>("generateMapButton") ||
+            !selector || !base_url || !api_key) return 1;
+        const QStringList expected{"", "https://api.openai.com/v1", "https://api.deepseek.com",
+                                   "https://openrouter.ai/api/v1", "https://api.siliconflow.cn/v1"};
+        for (int index = 1; index < expected.size(); ++index) {
+            api_key->setText("previous-provider-secret");
+            selector->setCurrentIndex(index);
+            if (base_url->text() != expected[index] || !api_key->text().isEmpty()) return 1;
+        }
+    }
     window.show();
     if (app.arguments().contains("--smoke-test"))
         QTimer::singleShot(100, &app, &QCoreApplication::quit);

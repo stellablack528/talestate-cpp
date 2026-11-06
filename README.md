@@ -40,14 +40,16 @@ The current release also includes an optional Qt desktop prototype: import a wor
 
 ## 🔑 开箱即用的 BYOK 模式 / Bring Your Own Key
 
-最终用户不需要训练模型，也不需要从零编写一套文游提示词。首次启动时只需配置：
+最终用户不需要训练模型，也不需要从零编写一套文游提示词。首次启动时可选择 OpenAI、DeepSeek、OpenRouter、硅基流动预设，或选择“自定义 · OpenAI 兼容”，然后填写：
 
 ```text
-API 类型：OpenAI-compatible
+API 类型：OpenAI-compatible Chat Completions
 Base URL：https://你的模型服务地址/v1
 API Key：由用户自己的模型服务商提供
 Model：用户选择的模型名称
 ```
+
+预设仅填写默认 API 地址，不代替用户选择模型或保证所有模型兼容。切换服务商会清空旧 API Key 和模型名，避免把旧 Key 发往新地址；地址仍可自行修改。当前使用 `/chat/completions` 协议；原生 Anthropic Messages、Gemini 原生接口及 OpenAI Responses 尚未实现。默认地址参考各服务商官方文档：[OpenAI](https://developers.openai.com/api/reference/resources/chat)、[DeepSeek](https://api-docs.deepseek.com/quick_start/agent_integrations/)、[OpenRouter](https://openrouter.ai/docs/api/api-reference/chat/send-chat-completion-request)、[硅基流动](https://docs.siliconflow.cn/docs/userguide/quickstart)。
 
 TaleState 在模型与游戏世界之间提供同一套专用能力：
 
@@ -81,7 +83,7 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 🧭 精确错误位置 | 输出错误代码、JSON 路径和可读错误信息，并返回非零退出码 |
 | 🏫 原创示例世界 | 提供“钟塔学院：失准的晨钟”，用固定双分支验证格式与校验流程 |
 | 📐 机器可读规范 | 提供 Story Package v1 JSON Schema 和对应格式说明 |
-| 🔑 BYOK 接入 | 在桌面原型中输入自己的 API 地址、Key 和模型名称；Key 仅保留在本次运行内存中 |
+| 🔑 BYOK 接入 | 在桌面原型中选择服务商预设或自定义兼容接口，再输入 API 地址、Key 和模型名称；Key 仅保留在本次运行内存中 |
 | 🔎 测试连接 | 无须先导入世界包，即可发送一次简短请求，检查基础对话连接并区分网络、认证、模型／接口等常见错误 |
 | 💾 手动存档／读档 | 保存并恢复地点、回合、金币、背包、变量、NPC 记忆与关系、已发生事件；校验世界包 ID／版本，不保存 API Key |
 | 🖥️ 本地桌面原型 | 导入带 Agent 规则的世界包，配置自己的模型，在界面中自由输入并查看剧情和权威状态 |
