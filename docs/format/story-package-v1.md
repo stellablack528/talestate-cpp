@@ -6,7 +6,7 @@
 SemVer 字符串。`entry` 指向初始章节、场景和节点；`variables` 声明有类型的初始
 变量；`chapters` 保存剧情树。可选的 `world_context` 描述世界设定；可选的
 `agent_actions` 声明创作者预设的行动能力；可选的 `agent_routes` 声明场景间可走路线，
-`agent_npcs` 声明可交谈 NPC 的位置和可选的对话规则；`agent_objects` 声明可观察对象及可拿取物品。
+`agent_npcs` 声明可交谈 NPC 的位置和可选的对话规则；`agent_objects` 声明可观察对象及可拿取物品；`agent_item_rules` 声明物品与 NPC 或现场对象的互动。
 
 所有 ID 建议使用小写 ASCII，并以命名空间前缀区分，例如 `chapter.arrival`、
 `scene.hall`。Schema 对 ID 的约束是 `^[a-z][a-z0-9_.-]*$`。
@@ -37,6 +37,8 @@ Agent 以结构化请求提交 `type`、`target` 和交谈时的 `topic`。`type
 - `talk`：`target` 为 `agent_npcs` 中当前场景内的 NPC ID，`topic` 为话题（1–256 字节单行文字）。普通自由话题只记录 `last_discussed_topic`；若 `topic` 精确等于该 NPC 的 `dialogue_rules[].id`，引擎先检查条件，再提交创作者批准的回复和效果。条件不满足则拒绝整个回合，不能退化成普通闲聊绕过。
 - `inspect`：`target` 为当前场景中 `agent_objects` 的 ID；返回创作者写的观察描述，不增加物品。
 - `take`：`target` 为当前场景中带 `item` 字段的对象 ID；引擎把一件物品加入背包并记下对象已被拿走。不可拿取、已被拿走或不在场的对象都会被拒绝。
+- `give`：`item` 为背包物品 ID，`target` 为当前地点 NPC ID。必须有匹配的 `agent_item_rules`；成功后转交一件物品，再执行创作者声明的效果。
+- `use`：`item` 为背包物品 ID，`target` 为当前地点对象 ID。必须有匹配的 `agent_item_rules`；`consume: true` 时消耗一件物品，默认保留。
 
 世界包中的声明示意：
 
@@ -47,6 +49,14 @@ Agent 以结构化请求提交 `type`、`target` 和交谈时的 `topic`。`type
 "agent_objects": [
   { "id": "object.shell-token", "name": "贝壳信物", "scene": "scene.dock",
     "description": "旧港徽记刻在贝壳上。", "item": "item.shell-token" }
+],
+"agent_item_rules": [
+  { "type": "give", "item": "item.shell-token", "target": "npc.alan",
+    "description": "阿澜收下信物。", "conditions": [],
+    "effects": [{ "type": "modify_npc_relationship", "npc": "npc.alan", "amount": 1 }] },
+  { "type": "use", "item": "item.shell-token", "target": "object.tide-chart",
+    "description": "信物与地图印记吻合。", "consume": false,
+    "conditions": [], "effects": [{ "type": "complete_event", "event": "event.chart-matched" }] }
 ],
 "agent_npcs": [
   { "id": "npc.alan", "name": "阿澜", "scene": "scene.dock", "dialogue_rules": [
@@ -68,6 +78,7 @@ Agent 以结构化请求提交 `type`、`target` 和交谈时的 `topic`。`type
 对象 `id` 在世界包内唯一，`scene` 必须引用已有场景。省略 `item` 时只能观察。
 观察描述只会在成功执行 `inspect` 后作为已确认事件返回；已拿走对象的 ID 保存在权威状态和存档中。
 旧版存档没有该字段时按尚未拿取处理。新对象应使用尚未被旧版预设行动发放的物品 ID，避免同一物品被不同规则重复授予。
+`agent_item_rules` 按 `type`、`item` 和 `target` 的组合唯一。目标必须引用已有 NPC（`give`）或对象（`use`）。引擎检查目标在场、背包至少有一件物品及全部条件；规则效果与扣物品作为同一回合原子提交，失败时全部回滚。规则效果不能直接移动玩家。`give` 总是转交一件物品；`consume` 只用于 `use`。
 对话规则的 `id` 在同一 NPC 内唯一；`description` 供 Agent 选择话题，`reply` 是创作者核准的 NPC 答复，只有执行成功才进入已提交事件。对话效果可沿用普通效果，但不能直接切换玩家场景或章节。未命中规则的话题仍可自由交谈，不过不会解锁线索或修改其他事实。生成式叙述本身尚无自动事实核查；判定线索是否真的获得，应以 C++ 提交的状态和事件为准。
 `target_node` 目标须在执行时的当前场景存在；跨场景移动使用 `agent_routes`，
 或在预设行动中使用 `switch_scene` 效果。`agent_routes` 的 `conditions` 可使用下述条件类型。

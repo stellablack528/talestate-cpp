@@ -2,26 +2,36 @@
 
 #include "storyforge/agent/connection_check.hpp"
 #include "storyforge/agent/story_agent.hpp"
+#include "storyforge/agent/world_map_generator.hpp"
 #include "storyforge/io/story_loader.hpp"
 #include "storyforge/io/story_save.hpp"
 
 #include <memory>
+#include <algorithm>
 #include <optional>
 #include <type_traits>
 #include <utility>
 #include <variant>
 
 #include <QApplication>
+#include <QDialog>
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QGraphicsScene>
+#include <QGraphicsTextItem>
+#include <QGraphicsView>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QPushButton>
+#include <QPen>
+#include <QBrush>
+#include <QPainter>
 #include <QSaveFile>
 #include <QSplitter>
 #include <QTextBrowser>
@@ -119,6 +129,9 @@ public:
         import_button_ = new QPushButton("导入世界包 story.json");
         world_layout->addWidget(world_label_);
         world_layout->addWidget(import_button_);
+        map_button_ = new QPushButton("根据世界观生成地图草案");
+        map_button_->setObjectName("generateMapButton");
+        world_layout->addWidget(map_button_);
         auto* save_row = new QHBoxLayout;
         save_button_ = new QPushButton("保存进度");
         save_button_->setObjectName("saveProgressButton");
@@ -129,6 +142,7 @@ public:
         world_layout->addLayout(save_row);
         left_layout->addWidget(world_group);
         connect(import_button_, &QPushButton::clicked, this, [this] { import_world(); });
+        connect(map_button_, &QPushButton::clicked, this, [this] { generate_map(); });
         connect(save_button_, &QPushButton::clicked, this, [this] { save_game(); });
         connect(continue_button_, &QPushButton::clicked, this, [this] { continue_game(); });
 
@@ -217,6 +231,7 @@ private:
         busy_ = busy;
         send_button_->setEnabled(!busy);
         import_button_->setEnabled(!busy);
+        map_button_->setEnabled(!busy);
         save_button_->setEnabled(!busy);
         continue_button_->setEnabled(!busy);
         test_connection_button_->setEnabled(!busy);
@@ -259,6 +274,98 @@ private:
         worker_->start();
     }
 
+    void show_map_draft(const storyforge::agent::WorldMapDraft& draft) {
+        QDialog dialog(this);
+        dialog.setWindowTitle("地图草案 · " + QString::fromStdString(draft.title));
+        dialog.resize(850, 680);
+        auto* layout = new QVBoxLayout(&dialog);
+        auto* note = new QLabel("这是模型提出、C++ 校验过的地点与路线草案。保存后仍需补充人物、规则和剧情，才能成为可玩的世界包。");
+        note->setWordWrap(true);
+        layout->addWidget(note);
+        auto* scene = new QGraphicsScene(&dialog);
+        for (const auto& route : draft.routes) {
+            const auto find = [&draft](const std::string& id) {
+                return std::find_if(draft.locations.begin(), draft.locations.end(),
+                    [&id](const auto& location) { return location.id == id; });
+            };
+            const auto a = find(route.from);
+            const auto b = find(route.to);
+            scene->addLine(95 + a->x * 150, 65 + a->y * 110,
+                           95 + b->x * 150, 65 + b->y * 110,
+                           QPen(QColor("#92795e"), 3));
+        }
+        for (const auto& location : draft.locations) {
+            const int x = 95 + location.x * 150;
+            const int y = 65 + location.y * 110;
+            const bool start = location.id == draft.start;
+            scene->addEllipse(x - 13, y - 13, 26, 26,
+                              QPen(QColor("#554436"), 2),
+                              QBrush(QColor(start ? "#d5a35a" : "#fffdf8")));
+            auto* label = scene->addText(QString::fromStdString(location.title));
+            label->setDefaultTextColor(QColor("#2f2d2a"));
+            label->setPos(x - label->boundingRect().width() / 2, y + 13);
+        }
+        scene->setSceneRect(0, 0, 790, 570);
+        auto* view = new QGraphicsView(scene);
+        view->setRenderHint(QPainter::Antialiasing);
+        layout->addWidget(view, 1);
+        QString details;
+        for (const auto& location : draft.locations)
+            details += QString::fromStdString(location.title + "：" + location.description) + "\n";
+        auto* description = new QLabel(details.trimmed());
+        description->setWordWrap(true);
+        layout->addWidget(description);
+        auto* buttons = new QHBoxLayout;
+        auto* save = new QPushButton("保存地图 JSON 草案");
+        auto* close = new QPushButton("关闭");
+        buttons->addWidget(save);
+        buttons->addWidget(close);
+        layout->addLayout(buttons);
+        connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+        connect(save, &QPushButton::clicked, &dialog, [this, &draft] {
+            const auto path = QFileDialog::getSaveFileName(this, "保存地图草案", "world-map-draft.json", "JSON (*.json)");
+            if (path.isEmpty()) return;
+            QSaveFile file(path);
+            const auto bytes = QByteArray::fromStdString(storyforge::agent::serialize_world_map_draft(draft));
+            if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
+                QMessageBox::warning(this, "保存失败", "无法写入地图草案，请检查文件位置和权限。");
+        });
+        dialog.exec();
+    }
+
+    void generate_map() {
+        if (busy_) return;
+        const auto config = provider_config();
+        if (const auto issues = storyforge::agent::validate(config); !issues.empty()) {
+            QMessageBox::warning(this, "模型配置不完整", QString::fromStdString(issues.front().message));
+            return;
+        }
+        bool accepted = false;
+        const auto brief = QInputDialog::getMultiLineText(this, "生成地图草案", "描述世界观、重要地点和探索方向：", {}, &accepted).trimmed();
+        if (!accepted) return;
+        if (brief.isEmpty() || brief.toUtf8().size() > 4000) {
+            QMessageBox::warning(this, "世界观长度不合适", "请填写不超过 4000 字节的世界观描述。");
+            return;
+        }
+        set_busy(true);
+        map_button_->setText("地图生成中…");
+        worker_ = QThread::create([this, config, brief = brief.toStdString()] {
+            auto transport = std::make_shared<talestate_desktop::QtHttpTransport>();
+            storyforge::agent::OpenAiCompatibleProvider provider(config, transport);
+            auto result = storyforge::agent::generate_world_map_draft(brief, provider);
+            QMetaObject::invokeMethod(this, [this, result = std::move(result)] {
+                set_busy(false);
+                map_button_->setText("根据世界观生成地图草案");
+                worker_ = nullptr;
+                if (const auto* error = std::get_if<storyforge::agent::WorldMapError>(&result))
+                    QMessageBox::warning(this, "地图生成失败", QString::fromStdString(error->message));
+                else show_map_draft(std::get<storyforge::agent::WorldMapDraft>(result));
+            }, Qt::QueuedConnection);
+        });
+        connect(worker_, &QThread::finished, worker_, &QObject::deleteLater);
+        worker_->start();
+    }
+
     void import_world() {
         const auto path = QFileDialog::getOpenFileName(this, "选择 Story Package 的 story.json", {},
                                                         "Story Package (story.json *.json)");
@@ -272,7 +379,8 @@ private:
             return;
         }
         if (loaded.package->agent_actions.empty() && loaded.package->agent_routes.empty() &&
-            loaded.package->agent_npcs.empty() && loaded.package->agent_objects.empty()) {
+            loaded.package->agent_npcs.empty() && loaded.package->agent_objects.empty() &&
+            loaded.package->agent_item_rules.empty()) {
             QMessageBox::warning(this, "缺少 Agent 规则",
                                  "这个世界包只有固定选项，还没有 Agent 行动规则，无法自由输入。请导入支持 Agent 的世界包。");
             return;
@@ -401,6 +509,7 @@ private:
     bool busy_{false};
     QLabel* world_label_{};
     QPushButton* import_button_{};
+    QPushButton* map_button_{};
     QPushButton* save_button_{};
     QPushButton* continue_button_{};
     QPushButton* send_button_{};
@@ -422,7 +531,8 @@ int main(int argc, char** argv) {
     if (app.arguments().contains("--smoke-test") &&
         (!window.findChild<QPushButton*>("testConnectionButton") ||
          !window.findChild<QPushButton*>("saveProgressButton") ||
-         !window.findChild<QPushButton*>("continueGameButton"))) return 1;
+         !window.findChild<QPushButton*>("continueGameButton") ||
+         !window.findChild<QPushButton*>("generateMapButton"))) return 1;
     window.show();
     if (app.arguments().contains("--smoke-test"))
         QTimer::singleShot(100, &app, &QCoreApplication::quit);

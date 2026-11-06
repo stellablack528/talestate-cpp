@@ -5,6 +5,7 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include <tuple>
 #include <type_traits>
 
 namespace storyforge {
@@ -338,6 +339,36 @@ ValidationReport validate_story_package(const StoryPackage& package) {
             report.add_error("semantic.missing_reference", path + "/scene", "unknown object scene");
         if (object.item && object.item->empty())
             report.add_error("semantic.invalid_object", path + "/item", "item id must not be empty");
+    }
+
+    std::set<std::tuple<AgentActionKind, std::string, std::string>> item_rule_keys;
+    for (std::size_t i = 0; i < package.agent_item_rules.size(); ++i) {
+        const auto& rule = package.agent_item_rules[i];
+        const auto path = "/agent_item_rules/" + std::to_string(i);
+        if (rule.kind != AgentActionKind::give && rule.kind != AgentActionKind::use)
+            report.add_error("semantic.invalid_item_rule", path + "/type", "expected give or use");
+        if (rule.item.empty() || rule.description.empty())
+            report.add_error("semantic.invalid_item_rule", path, "item and description must not be empty");
+        if (rule.kind == AgentActionKind::give && !npc_ids.contains(rule.target))
+            report.add_error("semantic.missing_reference", path + "/target", "unknown NPC target");
+        if (rule.kind == AgentActionKind::use && !object_ids.contains(rule.target))
+            report.add_error("semantic.missing_reference", path + "/target", "unknown object target");
+        if (!item_rule_keys.emplace(rule.kind, rule.item.value(), rule.target).second)
+            report.add_error("semantic.duplicate_id", path, "duplicate item interaction");
+        if (rule.kind == AgentActionKind::give && rule.consume)
+            report.add_error("semantic.invalid_item_rule", path + "/consume", "give always transfers one item");
+        for (std::size_t j = 0; j < rule.conditions.size(); ++j)
+            validate_condition(rule.conditions[j], path + "/conditions/" + std::to_string(j),
+                               variables, scene_ids, report);
+        for (std::size_t j = 0; j < rule.effects.size(); ++j) {
+            const auto effect_path = path + "/effects/" + std::to_string(j);
+            const auto& effect = rule.effects[j];
+            validate_effect(effect, effect_path, variables, scene_ids, chapter_ids, report);
+            if (std::holds_alternative<SwitchSceneEffect>(effect.data) ||
+                std::holds_alternative<AdvanceChapterEffect>(effect.data))
+                report.add_error("semantic.invalid_item_rule", effect_path,
+                                 "item interaction cannot change player position");
+        }
     }
 
     const StoryChapter* entry_chapter = find_chapter(package, package.entry.chapter);

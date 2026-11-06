@@ -2,7 +2,7 @@
   "format": "storyforge.package/v1",
   "id": "clockwork-academy",
   "title": "钟塔学院：失准的晨钟",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "entry": {
     "chapter": "chapter.arrival",
     "scene": "scene.bell-hall",
@@ -31,6 +31,20 @@
   "agent_objects": [
     { "id": "object.bell-inscription", "name": "钟座铭文", "scene": "scene.bell-hall", "description": "铭文记载：晨钟原本每天只应敲响十二下。" },
     { "id": "object.brass-button", "name": "铜制制服纽扣", "scene": "scene.bell-hall", "description": "一枚印着学院校徽的铜纽扣，落在钟座下。", "item": "item.brass-button" }
+  ],
+  "agent_item_rules": [
+    { "type": "give", "item": "item.brass-button", "target": "npc.tutor-lin",
+      "description": "导师林收下制服纽扣，答应追查它的主人。",
+      "conditions": [{ "type": "not", "condition": { "type": "event_triggered", "event": "event.button-given" } }],
+      "effects": [
+        { "type": "modify_npc_relationship", "npc": "npc.tutor-lin", "amount": 1 },
+        { "type": "complete_event", "event": "event.button-given" }
+      ] },
+    { "type": "use", "item": "item.brass-button", "target": "object.bell-inscription",
+      "description": "纽扣上的校徽与钟座铭文旁的旧印记完全一致。",
+      "consume": true,
+      "conditions": [{ "type": "not", "condition": { "type": "event_triggered", "event": "event.inscription-matched" } }],
+      "effects": [{ "type": "complete_event", "event": "event.inscription-matched" }] }
   ],
   "agent_actions": [
     {

@@ -158,12 +158,23 @@ struct AgentObject {
     std::optional<ItemId> item;
 };
 
-enum class AgentActionKind { authored, move, talk, inspect, take };
+enum class AgentActionKind { authored, move, talk, inspect, take, give, use };
+
+struct AgentItemRule {
+    AgentActionKind kind{AgentActionKind::use};
+    ItemId item;
+    std::string target;
+    std::string description;
+    bool consume{false};
+    std::vector<StoryCondition> conditions;
+    std::vector<StoryEffect> effects;
+};
 
 struct AgentActionRequest {
     AgentActionKind kind{AgentActionKind::authored};
     std::string target;
     std::string topic;
+    std::string item;
 };
 
 struct StoryNode {
@@ -208,6 +219,7 @@ struct StoryPackage {
     std::vector<AgentRoute> agent_routes;
     std::vector<AgentNpc> agent_npcs;
     std::vector<AgentObject> agent_objects;
+    std::vector<AgentItemRule> agent_item_rules;
 };
 
 struct StoryState {

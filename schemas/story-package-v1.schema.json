@@ -17,7 +17,8 @@
     "agent_actions": { "type": "array", "items": { "$ref": "#/$defs/choice" } },
     "agent_routes": { "type": "array", "items": { "$ref": "#/$defs/agentRoute" } },
     "agent_npcs": { "type": "array", "items": { "$ref": "#/$defs/agentNpc" } },
-    "agent_objects": { "type": "array", "items": { "$ref": "#/$defs/agentObject" } }
+    "agent_objects": { "type": "array", "items": { "$ref": "#/$defs/agentObject" } },
+    "agent_item_rules": { "type": "array", "items": { "$ref": "#/$defs/agentItemRule" } }
   },
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
@@ -64,6 +65,19 @@
         "scene": { "$ref": "#/$defs/id" },
         "description": { "$ref": "#/$defs/nonEmptyString" },
         "item": { "$ref": "#/$defs/id" }
+      }
+    },
+    "agentItemRule": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "item", "target", "description", "conditions", "effects"],
+      "properties": {
+        "type": { "enum": ["give", "use"] },
+        "item": { "$ref": "#/$defs/id" },
+        "target": { "$ref": "#/$defs/id" },
+        "description": { "$ref": "#/$defs/nonEmptyString" },
+        "consume": { "type": "boolean" },
+        "conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+        "effects": { "type": "array", "items": { "$ref": "#/$defs/effect" } }
       }
     },
     "dialogueRule": {

@@ -20,7 +20,7 @@
 
 项目追求的不是无限制的 AI 即兴创作，而是**受约束的生成式叙事（Constrained Generative Narrative）**：创作者决定世界与命运的边界，Agent 创造旅途中的道路，玩家决定如何行动，引擎保证世界规则始终可信。
 
-当前版本提供两种入口：命令行的固定选项玩法，以及可选构建的 **Qt 本地桌面原型**。桌面原型支持导入带 Agent 规则的世界包、填写自己的兼容模型 API、自然语言输入、Agent 规划与修复、C++ 权威状态裁决、生成式叙述以及手动存档／读档。通用行动协议 v1 支持带参数的跨场景移动、NPC 交谈、观察与拿取；示例包含钟塔学院与雾港两个不同世界。它仍是早期工具：路线、NPC 所在地、对象及其他改变事实的效果需要创作者声明，完整可视化世界编辑器、聊天记录恢复和更开放的动态事件规则尚未实现。
+当前版本提供两种入口：命令行的固定选项玩法，以及可选构建的 **Qt 本地桌面原型**。桌面原型支持导入带 Agent 规则的世界包、填写自己的兼容模型 API、自然语言输入、Agent 规划与修复、C++ 权威状态裁决、生成式叙述以及手动存档／读档。通用行动协议 v1 支持带参数的跨场景移动、NPC 交谈、观察、拿取、给予与使用；示例包含钟塔学院与雾港两个不同世界。创作者也能输入世界观，让模型提议地点与路线，经 C++ 检查后预览、导出地图 JSON 草案。它仍是早期工具：地图草案尚不能直接游玩，人物、规则、剧情和结局还需补齐。
 
 ### English
 
@@ -34,7 +34,7 @@ The goal is constrained generative narrative rather than unrestricted AI improvi
 
 TaleState uses a BYOK model: users supply the endpoint, API key, and model of a compatible service. TaleState supplies the RPG-specific agent workflow, structured actions, validation, repair, and memory strategy, so model choice does not define the rules of the world.
 
-The current release also includes an optional Qt desktop prototype: import a world package, enter an OpenAI-compatible endpoint/key/model, type free-form actions, and see model planning, repair, narration, and C++-committed state. Manual saves restore authoritative world state without storing credentials or chat history. A parameterized action protocol supports rule-checked movement and NPC conversation across two distinct example worlds. Routes, NPC placement, and other state-changing capabilities remain author-declared; visual authoring and richer dynamic events remain future work.
+The current release also includes an optional Qt desktop prototype: import a world package, enter an OpenAI-compatible endpoint/key/model, type free-form actions, and see model planning, repair, narration, and C++-committed state. Manual saves restore authoritative world state without storing credentials or chat history. A parameterized action protocol supports movement, conversation, inspection, pickup, giving, and item use across two example worlds. Creators can also turn a world brief into a validated, previewable JSON map draft. Map drafts are not yet playable world packages; routes, NPC placement, game rules, and endings must still be authored and validated.
 
 ---
 
@@ -88,6 +88,8 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 🧭 Agent 规则组合 | 通过自然语言选择并组合创作者授权的行动，不必预写每条完整剧情路线 |
 | 🚶 通用行动协议 v1 | 用同一套 `move` / `talk` 请求在不同世界移动与交谈；非法目标、封锁路线和不在场的 NPC 都会被拒绝 |
 | 🔍 观察与拿取 | 用 `inspect` 查看当前场景对象的作者描述，用 `take` 拿走可拾取物品；拿过的对象读档后不会重现 |
+| 🎁 给予与使用 | 把背包物品交给在场 NPC，或对现场对象使用；具体后果由世界包声明并经 C++ 校验 |
+| 🗺️ 世界观地图草案 | 输入世界观后，通过 BYOK 模型提出地点与路线；C++ 检查唯一性、引用和可达性，在桌面端预览并导出 JSON 草案 |
 
 > 桌面原型已能处理自由文字；移动依赖世界包中的路线，交谈依赖 NPC 的位置，其余影响金币、物品、关系和结局的效果仍需创作者通过 `agent_actions` 授权。模型可以自由叙述，不能自由篡改事实。这是高自由工具的第一阶段，不等于任意行动都已有完整规则支持。
 
@@ -108,12 +110,16 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 🤖 Agent 闭环 | 规划结构化授权行动、C++ 校验、失败修复、按提交结果叙述，保留最近回合的事实摘要 |
 | 🧭 参数化行动执行器 | 接收 `type`、`target`、交谈 `topic`；按顺序校验路线、条件、NPC 在场性，并原子提交或整轮回滚 |
 | 📦 场景对象状态 | 校验对象 ID 与场景引用；拿取时原子更新背包和已拿取集合，并持久化到存档 |
+| 🧰 物品互动规则 | 按物品与目标匹配 `give` / `use`，检查背包、在场性和条件，原子提交资源与世界效果 |
+| 🗺️ 地图生成边界 | 模型仅提出结构化地图，C++ 检查地点 ID、坐标、重复路线和全图连通性；失败时修复一次，不改变游戏状态 |
 | 🖥️ Qt 宿主 | 可选桌面应用实现真实 HTTPS 请求；核心 `storyforge` 库不依赖 Qt |
 | 🌐 兼容协议适配 | `OpenAiCompatibleProvider` 构造 `/chat/completions` 请求并解析内容、用量和请求 ID |
 | 🔎 连接诊断 | 复用正式 Provider 与传输层做一次最小对话请求；界面只展示固定分类提示，不回显服务商原始错误或 API Key |
 | 🔐 BYOK 安全边界 | 校验 HTTPS、限制请求与响应体大小、日志描述自动隐藏 API Key，并区分可重试错误 |
 | 🧪 自动化测试 | Catch2 覆盖合法包、损坏 JSON、缺字段、重复 ID、坏引用、非法效果与不可达节点 |
 | 🔄 跨平台 CI | GitHub Actions 在 Windows 与 Linux 上构建、测试并验证示例剧情包 |
+
+地图草案的设计来源与边界见 [世界观地图草案](docs/architecture/world-map-draft.md)。
 
 ---
 
@@ -280,6 +286,8 @@ talestate-cpp/
 - [x] 跨两个世界的 Agent 行动规则与原子组合执行
 - [x] 跨两个世界的参数化移动、NPC 交谈与封锁路线校验
 - [x] 跨两个世界的通用观察、拿取、重复拿取拒绝与存档恢复
+- [x] 跨两个世界的通用给予、使用与物品互动规则
+- [x] 世界观到地图 JSON 草案的生成、C++ 连通性校验、Qt 预览与导出
 - [x] 结构化规划、最多一次修复、事实约束叙述与最近回合摘要
 - [x] 可选 Qt 本地界面与真实 HTTPS 传输
 - [x] 导入世界包、BYOK 配置、自由文字输入和权威状态展示
@@ -376,7 +384,7 @@ Visual Studio 等多配置生成器：
 成功输出：
 
 ```text
-valid Story Package v1: 钟塔学院：失准的晨钟 (clockwork-academy @ 0.2.0)
+valid Story Package v1: 钟塔学院：失准的晨钟 (clockwork-academy @ 0.3.0)
 1 chapter(s), 0 warning(s)
 ```
 
@@ -437,9 +445,10 @@ ctest --test-dir build -C Release --output-on-failure
 - 可选 Qt 桌面启动和本机 HTTP 传输测试
 - 两个不同世界共用 `move` / `talk` 协议、失败整轮回滚与 Agent 修复测试
 - 两个不同世界共用 `inspect` / `take` 协议、重复拿取拒绝与读档后物品状态恢复
+- 两个不同世界共用 `give` / `use` 协议、背包不足拒绝和物品效果原子提交
 - 最小连接请求、错误分类与本机模拟服务成功／认证失败测试
 
-当前基线：**46 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和 Qt 集成测试，本机合计 **48/48 通过**（集成测试内部覆盖连接响应、认证失败及真实文件存取）。
+当前基线：**53 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和 Qt 集成测试，本机合计 **55/55 通过**（集成测试内部覆盖连接响应、认证失败及真实文件存取）。
 
 其中模型接口测试使用内存中的假网络传输，不会读取真实 API Key、访问外部服务或产生模型费用。
 
@@ -465,7 +474,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 完整字段定义见 [Story Package v1 格式说明](docs/format/story-package-v1.md) 和 [JSON Schema](schemas/story-package-v1.schema.json)。请注意：上面的片段只展示顶层形状，空章节数组不能通过语义校验；可运行示例请参考 [Clockwork Academy](examples/clockwork-academy/story.json)。
 
-Story Package v1 同时支持传统固定选项、`agent_actions` 授权行动，以及 `agent_routes` / `agent_npcs` / `agent_objects` 支撑的通用移动、交谈、观察与拿取。玩家可以自由输入文字，由 Agent 提出带类型和目标的行动；C++ 引擎核对世界规则后才提交。这不是无限制的状态编辑。后续格式会进一步区分世界事实、剧情锚点、动态结局条件与 Agent 候选事件。
+Story Package v1 同时支持传统固定选项、`agent_actions` 授权行动，以及 `agent_routes` / `agent_npcs` / `agent_objects` / `agent_item_rules` 支撑的通用移动、交谈、观察、拿取、给予与使用。玩家可以自由输入文字，由 Agent 提出带类型和目标的行动；C++ 引擎核对世界规则后才提交。这不是无限制的状态编辑。后续格式会进一步区分世界事实、剧情锚点、动态结局条件与 Agent 候选事件。
 
 ---
 

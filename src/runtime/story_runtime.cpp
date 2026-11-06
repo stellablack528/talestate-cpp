@@ -355,7 +355,8 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
     if (node->terminal)
         return error(RuntimeErrorCode::story_finished, "故事已经结束");
     if (package.agent_actions.empty() && package.agent_routes.empty() &&
-        package.agent_npcs.empty() && package.agent_objects.empty())
+        package.agent_npcs.empty() && package.agent_objects.empty() &&
+        package.agent_item_rules.empty())
         return error(RuntimeErrorCode::invalid_effect, "该世界未声明 Agent 行动规则");
     if (actions.size() > 3)
         return error(RuntimeErrorCode::invalid_effect, "一回合最多执行三个行动");
@@ -371,6 +372,9 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
             return error(RuntimeErrorCode::invalid_position, "当前位置不存在");
         if (current->terminal)
             return error(RuntimeErrorCode::story_finished, "故事已经结束");
+        if (request.kind != AgentActionKind::give && request.kind != AgentActionKind::use &&
+            !request.item.empty())
+            return error(RuntimeErrorCode::invalid_effect, "这个行动不接受物品参数");
         if (request.kind == AgentActionKind::authored) {
             if (!request.topic.empty())
                 return error(RuntimeErrorCode::invalid_effect, "预设行动不接受话题参数");
@@ -451,6 +455,45 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                 candidate.collected_objects.insert(found->id);
                 events.push_back({"object_taken", "已从场景拿走 " + found->name});
             }
+        } else if (request.kind == AgentActionKind::give || request.kind == AgentActionKind::use) {
+            if (!request.topic.empty() || request.item.empty())
+                return error(RuntimeErrorCode::invalid_effect, "给予或使用必须指定物品，且不接受话题参数");
+            const auto rule = std::find_if(package.agent_item_rules.begin(), package.agent_item_rules.end(),
+                [&](const AgentItemRule& value) {
+                    return value.kind == request.kind && value.target == request.target &&
+                           value.item.value() == request.item;
+                });
+            if (rule == package.agent_item_rules.end())
+                return error(RuntimeErrorCode::unknown_choice, "这个世界没有声明该物品与目标的互动规则");
+            if (request.kind == AgentActionKind::give) {
+                const auto npc = std::find_if(package.agent_npcs.begin(), package.agent_npcs.end(),
+                    [&](const AgentNpc& value) { return value.id.value() == request.target; });
+                if (npc == package.agent_npcs.end() || npc->scene != candidate.position.scene)
+                    return error(RuntimeErrorCode::condition_unmet, "收取物品的 NPC 不在当前场景");
+            } else {
+                const auto object = std::find_if(package.agent_objects.begin(), package.agent_objects.end(),
+                    [&](const AgentObject& value) { return value.id == request.target; });
+                if (object == package.agent_objects.end() || object->scene != candidate.position.scene ||
+                    candidate.collected_objects.contains(request.target))
+                    return error(RuntimeErrorCode::condition_unmet, "使用物品的对象不在当前场景");
+            }
+            const auto owned = candidate.inventory.find(rule->item);
+            if (owned == candidate.inventory.end() || owned->second < 1)
+                return error(RuntimeErrorCode::insufficient_resources, "背包里没有要使用的物品：" + request.item);
+            if (!std::all_of(rule->conditions.begin(), rule->conditions.end(),
+                [&](const StoryCondition& condition) { return evaluate_condition(condition, candidate); }))
+                return error(RuntimeErrorCode::condition_unmet, "这个物品互动的条件尚未满足");
+            if (request.kind == AgentActionKind::give || rule->consume)
+                if (auto failure = apply_effect(package, candidate,
+                        StoryEffect{RemoveItemEffect{rule->item, 1}}, events)) return *failure;
+            for (const auto& effect : rule->effects) {
+                if (std::holds_alternative<SwitchSceneEffect>(effect.data) ||
+                    std::holds_alternative<AdvanceChapterEffect>(effect.data))
+                    return error(RuntimeErrorCode::invalid_effect, "物品互动不能直接移动玩家");
+                if (auto failure = apply_effect(package, candidate, effect, events)) return *failure;
+            }
+            events.push_back({request.kind == AgentActionKind::give ? "item_given" : "item_used",
+                              rule->description});
         } else {
             return error(RuntimeErrorCode::invalid_effect, "未知的行动类型");
         }
@@ -468,7 +511,7 @@ CommandResult execute_agent_actions(const StoryPackage& package, StoryState& sta
     std::vector<AgentActionRequest> requests;
     requests.reserve(actions.size());
     for (const auto& action : actions)
-        requests.push_back({AgentActionKind::authored, action.value(), {}});
+        requests.push_back({AgentActionKind::authored, action.value(), {}, {}});
     return execute_agent_requests(package, state, requests);
 }
 

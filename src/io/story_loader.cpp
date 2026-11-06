@@ -316,7 +316,7 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
         return {};
     }
     StoryPackage package;
-    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "agent_actions", "agent_routes", "agent_npcs", "agent_objects"}, report);
+    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "agent_actions", "agent_routes", "agent_npcs", "agent_objects", "agent_item_rules"}, report);
     package.format = read_string(json, "format", "", report);
     package.id = StoryId{read_id(json, "id", "", report)};
     package.title = read_string(json, "title", "", report);
@@ -425,6 +425,37 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
             if (raw.is_object() && raw.contains("item"))
                 object.item = ItemId{read_id(raw, "item", path, report)};
             package.agent_objects.push_back(std::move(object));
+        }
+    }
+    if (const auto it = json.find("agent_item_rules"); it != json.end()) {
+        if (!it->is_array()) type_error(report, "/agent_item_rules", "array");
+        else for (std::size_t i = 0; i < it->size(); ++i) {
+            const auto path = "/agent_item_rules/" + std::to_string(i);
+            const auto& raw = (*it)[i];
+            reject_unknown_properties(raw, path,
+                {"type", "item", "target", "description", "consume", "conditions", "effects"}, report);
+            const auto type = read_string(raw, "type", path, report);
+            if (type != "give" && type != "use")
+                report.add_error("schema.enum", path + "/type", "expected give or use");
+            AgentItemRule rule{type == "give" ? AgentActionKind::give : AgentActionKind::use,
+                ItemId{read_id(raw, "item", path, report)},
+                read_id(raw, "target", path, report),
+                read_string(raw, "description", path, report), false, {}, {}};
+            if (raw.is_object() && raw.contains("consume")) {
+                if (raw["consume"].is_boolean()) rule.consume = raw["consume"].get<bool>();
+                else type_error(report, path + "/consume", "boolean");
+            }
+            if (const Json* values = read_array(raw, "conditions", path, report))
+                for (std::size_t j = 0; j < values->size(); ++j) {
+                    auto condition = read_condition((*values)[j], path + "/conditions/" + std::to_string(j), report);
+                    if (condition) rule.conditions.push_back(std::move(*condition));
+                }
+            if (const Json* values = read_array(raw, "effects", path, report))
+                for (std::size_t j = 0; j < values->size(); ++j) {
+                    auto effect = read_effect((*values)[j], path + "/effects/" + std::to_string(j), report);
+                    if (effect) rule.effects.push_back(std::move(*effect));
+                }
+            package.agent_item_rules.push_back(std::move(rule));
         }
     }
     return package;
