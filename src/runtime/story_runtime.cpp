@@ -81,6 +81,28 @@ RuntimeError error(RuntimeErrorCode code, std::string message) {
     return {code, std::move(message)};
 }
 
+// MSVC does not mark the aggregate StoryState move assignment as noexcept,
+// although each member can be swapped without throwing. Commit memberwise.
+void swap_story_state(StoryState& left, StoryState& right) noexcept {
+    static_assert(std::is_nothrow_swappable_v<StoryEntry> &&
+                  std::is_nothrow_swappable_v<decltype(StoryState::variables)> &&
+                  std::is_nothrow_swappable_v<decltype(StoryState::inventory)> &&
+                  std::is_nothrow_swappable_v<decltype(StoryState::npc_memory)> &&
+                  std::is_nothrow_swappable_v<decltype(StoryState::npc_relationships)> &&
+                  std::is_nothrow_swappable_v<decltype(StoryState::completed_events)> &&
+                  std::is_nothrow_swappable_v<decltype(StoryState::collected_objects)>);
+    using std::swap;
+    swap(left.position, right.position);
+    swap(left.variables, right.variables);
+    swap(left.gold, right.gold);
+    swap(left.inventory, right.inventory);
+    swap(left.npc_memory, right.npc_memory);
+    swap(left.npc_relationships, right.npc_relationships);
+    swap(left.completed_events, right.completed_events);
+    swap(left.collected_objects, right.collected_objects);
+    swap(left.turn, right.turn);
+}
+
 std::optional<RuntimeError> apply_effect(const StoryPackage& package, StoryState& candidate,
                                          const StoryEffect& effect,
                                          std::vector<StoryEvent>& events) {
@@ -305,9 +327,7 @@ CommandResult execute_choice(const StoryPackage& package, StoryState& state,
     ++candidate.turn;
 
     StoryDelta delta{state, candidate, std::move(events)};
-    using std::swap;
-    static_assert(std::is_nothrow_swappable_v<StoryState>);
-    swap(state, candidate);
+    swap_story_state(state, candidate);
     return delta;
 }
 
@@ -439,8 +459,7 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
     // is evaluated against the candidate state left by the preceding one.
     candidate.turn = state.turn + 1;
     StoryDelta delta{state, candidate, std::move(events)};
-    using std::swap;
-    swap(state, candidate);
+    swap_story_state(state, candidate);
     return delta;
 }
 
