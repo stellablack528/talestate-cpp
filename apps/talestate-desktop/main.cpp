@@ -3,6 +3,7 @@
 #include "storyforge/agent/connection_check.hpp"
 #include "storyforge/agent/story_agent.hpp"
 #include "storyforge/agent/world_map_generator.hpp"
+#include "storyforge/agent/world_seed_generator.hpp"
 #include "storyforge/io/story_loader.hpp"
 #include "storyforge/io/story_save.hpp"
 
@@ -56,8 +57,12 @@ QString state_summary(const storyforge::StoryPackage& package,
     result += "回合 " + QString::number(state.turn) + "　金币 " + QString::number(state.gold) + "\n\n";
     result += "背包\n";
     if (state.inventory.empty()) result += "  空\n";
-    for (const auto& [item, quantity] : state.inventory)
-        result += "  " + QString::fromStdString(item.value()) + " ×" + QString::number(quantity) + "\n";
+    for (const auto& [item, quantity] : state.inventory) {
+        const auto found = std::find_if(package.agent_objects.begin(), package.agent_objects.end(),
+            [&](const storyforge::AgentObject& object) { return object.item == item; });
+        const auto& label = found == package.agent_objects.end() ? item.value() : found->name;
+        result += "  " + QString::fromStdString(label) + " ×" + QString::number(quantity) + "\n";
+    }
     result += "\n世界变量\n";
     for (const auto& [id, value] : state.variables) {
         const QString text = std::visit([](const auto& value) -> QString {
@@ -133,6 +138,9 @@ public:
         map_button_ = new QPushButton("根据世界观生成地图草案");
         map_button_->setObjectName("generateMapButton");
         world_layout->addWidget(map_button_);
+        seed_button_ = new QPushButton("根据世界观生成探索世界包");
+        seed_button_->setObjectName("generateSeedButton");
+        world_layout->addWidget(seed_button_);
         auto* save_row = new QHBoxLayout;
         save_button_ = new QPushButton("保存进度");
         save_button_->setObjectName("saveProgressButton");
@@ -144,6 +152,7 @@ public:
         left_layout->addWidget(world_group);
         connect(import_button_, &QPushButton::clicked, this, [this] { import_world(); });
         connect(map_button_, &QPushButton::clicked, this, [this] { generate_map(); });
+        connect(seed_button_, &QPushButton::clicked, this, [this] { generate_seed(); });
         connect(save_button_, &QPushButton::clicked, this, [this] { save_game(); });
         connect(continue_button_, &QPushButton::clicked, this, [this] { continue_game(); });
 
@@ -255,6 +264,7 @@ private:
         send_button_->setEnabled(!busy);
         import_button_->setEnabled(!busy);
         map_button_->setEnabled(!busy);
+        seed_button_->setEnabled(!busy);
         save_button_->setEnabled(!busy);
         continue_button_->setEnabled(!busy);
         test_connection_button_->setEnabled(!busy);
@@ -390,24 +400,89 @@ private:
         worker_->start();
     }
 
+    void generate_seed() {
+        if (busy_) return;
+        const auto config = provider_config();
+        if (const auto issues = storyforge::agent::validate(config); !issues.empty()) {
+            QMessageBox::warning(this, "模型配置不完整", QString::fromStdString(issues.front().message));
+            return;
+        }
+        bool accepted = false;
+        const auto brief = QInputDialog::getMultiLineText(this, "生成探索世界包",
+            "描述世界观、重要地点和想探索的冲突：", {}, &accepted).trimmed();
+        if (!accepted) return;
+        if (brief.isEmpty() || brief.toUtf8().size() > 4000) {
+            QMessageBox::warning(this, "世界观长度不合适", "请填写不超过 4000 字节的世界观描述。");
+            return;
+        }
+        set_busy(true);
+        seed_button_->setText("世界包生成中…");
+        worker_ = QThread::create([this, config, input = brief.toStdString()] {
+            auto transport = std::make_shared<talestate_desktop::QtHttpTransport>();
+            storyforge::agent::OpenAiCompatibleProvider provider(config, transport);
+            auto map = storyforge::agent::generate_world_map_draft(input, provider, 3);
+            storyforge::agent::WorldSeedResult result;
+            if (const auto* failure = std::get_if<storyforge::agent::WorldMapError>(&map))
+                result = storyforge::agent::WorldSeedError{failure->message};
+            else result = storyforge::agent::generate_world_seed_from_map(
+                std::get<storyforge::agent::WorldMapDraft>(map), input, provider);
+            QMetaObject::invokeMethod(this, [this, result = std::move(result)] {
+                set_busy(false);
+                seed_button_->setText("根据世界观生成探索世界包");
+                worker_ = nullptr;
+                if (const auto* failure = std::get_if<storyforge::agent::WorldSeedError>(&result)) {
+                    QMessageBox::warning(this, "生成失败", QString::fromStdString(failure->message));
+                    return;
+                }
+                const auto& seed = std::get<storyforge::agent::WorldSeedDraft>(result);
+                const auto checked = storyforge::load_story_package_text(seed.story_json);
+                if (!checked.package || !checked.report.valid()) {
+                    QString problems;
+                    for (const auto& issue : checked.report.issues)
+                        problems += QString::fromStdString(issue.path + ": " + issue.message) + "\n";
+                    QMessageBox::warning(this, "生成的世界包未通过校验", problems.left(3000));
+                    return;
+                }
+                const auto path = QFileDialog::getSaveFileName(this, "保存探索世界包", "story.json", "Story Package (*.json)");
+                if (path.isEmpty()) return;
+                const auto bytes = QByteArray::fromStdString(seed.story_json);
+                QSaveFile file(path);
+                if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+                    QMessageBox::warning(this, "保存失败", "无法写入世界包，请检查文件位置和权限。");
+                    return;
+                }
+                if (!load_world_from_path(path)) return;
+                QMessageBox::information(this, "探索世界已加载",
+                    "已生成三个地点和初始人物，可以开始探索与交谈。\n当前阶段尚未生成结局与复杂物品规则。\n目标：" +
+                    QString::fromStdString(seed.opening_goal));
+            }, Qt::QueuedConnection);
+        });
+        connect(worker_, &QThread::finished, worker_, &QObject::deleteLater);
+        worker_->start();
+    }
+
     void import_world() {
         const auto path = QFileDialog::getOpenFileName(this, "选择 Story Package 的 story.json", {},
                                                         "Story Package (story.json *.json)");
         if (path.isEmpty()) return;
+        load_world_from_path(path);
+    }
+
+    bool load_world_from_path(const QString& path) {
         const auto loaded = storyforge::load_story_package(path.toStdWString());
         if (!loaded.package || !loaded.report.valid()) {
             QString problems;
             for (const auto& issue : loaded.report.issues)
                 problems += QString::fromStdString(issue.path + ": " + issue.message) + "\n";
             QMessageBox::warning(this, "世界包未通过校验", problems.left(3000));
-            return;
+            return false;
         }
         if (loaded.package->agent_actions.empty() && loaded.package->agent_routes.empty() &&
             loaded.package->agent_npcs.empty() && loaded.package->agent_objects.empty() &&
             loaded.package->agent_item_rules.empty()) {
             QMessageBox::warning(this, "缺少 Agent 规则",
                                  "这个世界包只有固定选项，还没有 Agent 行动规则，无法自由输入。请导入支持 Agent 的世界包。");
-            return;
+            return false;
         }
         package_ = std::move(*loaded.package);
         state_ = storyforge::make_initial_state(*package_);
@@ -416,6 +491,7 @@ private:
         story_view_->clear();
         append_story("世界", storyforge::current_node(*package_, state_)->text);
         state_view_->setPlainText(state_summary(*package_, state_));
+        return true;
     }
 
     void save_game() {
@@ -534,6 +610,7 @@ private:
     QLabel* world_label_{};
     QPushButton* import_button_{};
     QPushButton* map_button_{};
+    QPushButton* seed_button_{};
     QPushButton* save_button_{};
     QPushButton* continue_button_{};
     QPushButton* send_button_{};
@@ -561,6 +638,7 @@ int main(int argc, char** argv) {
             !window.findChild<QPushButton*>("saveProgressButton") ||
             !window.findChild<QPushButton*>("continueGameButton") ||
             !window.findChild<QPushButton*>("generateMapButton") ||
+            !window.findChild<QPushButton*>("generateSeedButton") ||
             !selector || !base_url || !api_key) return 1;
         const QStringList expected{"", "https://api.openai.com/v1", "https://api.deepseek.com",
                                    "https://openrouter.ai/api/v1", "https://api.siliconflow.cn/v1"};

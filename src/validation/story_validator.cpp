@@ -299,6 +299,9 @@ ValidationReport validate_story_package(const StoryPackage& package) {
         const auto path = "/agent_npcs/" + std::to_string(i);
         if (!scene_ids.contains(npc.scene.value()))
             report.add_error("semantic.missing_reference", path + "/scene", "unknown NPC scene");
+        if (npc.initial_relationship < -100 || npc.initial_relationship > 100)
+            report.add_error("semantic.invalid_npc", path + "/initial_relationship",
+                             "initial relationship must be between -100 and 100");
         std::set<std::string> topic_ids;
         for (std::size_t j = 0; j < npc.dialogue_rules.size(); ++j) {
             const auto& rule = npc.dialogue_rules[j];

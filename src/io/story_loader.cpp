@@ -1,6 +1,7 @@
 #include "storyforge/io/story_loader.hpp"
 
 #include <fstream>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <regex>
@@ -380,9 +381,14 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
         else for (std::size_t i = 0; i < it->size(); ++i) {
             const auto path = "/agent_npcs/" + std::to_string(i);
             const auto& raw = (*it)[i];
-            reject_unknown_properties(raw, path, {"id", "name", "scene", "dialogue_rules"}, report);
+            reject_unknown_properties(raw, path, {"id", "name", "scene", "dialogue_rules", "initial_relationship"}, report);
             AgentNpc npc{NpcId{read_id(raw, "id", path, report)},
                 read_string(raw, "name", path, report), SceneId{read_id(raw, "scene", path, report)}, {}};
+            if (const auto value = raw.is_object() ? raw.find("initial_relationship") : raw.end();
+                value != raw.end()) {
+                if (value->is_number_integer()) npc.initial_relationship = value->get<std::int64_t>();
+                else type_error(report, path + "/initial_relationship", "integer");
+            }
             if (const auto rules = raw.is_object() ? raw.find("dialogue_rules") : raw.end();
                 rules != raw.end()) {
                 if (!rules->is_array()) type_error(report, path + "/dialogue_rules", "array");
@@ -463,6 +469,27 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
 
 } // namespace
 
+LoadResult load_story_package_text(const std::string& json_text) {
+    LoadResult result;
+    if (json_text.size() > max_package_bytes) {
+        result.report.add_error("io.too_large", "", "story package exceeds the 16 MiB limit");
+        return result;
+    }
+    try {
+        const Json json = Json::parse(json_text, nullptr, true, true);
+        auto package = read_package(json, result.report);
+        if (result.report.valid()) {
+            result.package = std::move(package);
+            result.report.append(validate_story_package(*result.package));
+        }
+    } catch (const Json::parse_error& exception) {
+        result.report.add_error("json.parse", "", exception.what());
+    } catch (const Json::exception& exception) {
+        result.report.add_error("json.value", "", exception.what());
+    }
+    return result;
+}
+
 LoadResult load_story_package(const std::filesystem::path& requested_path) {
     LoadResult result;
     std::filesystem::path path = requested_path;
@@ -482,19 +509,13 @@ LoadResult load_story_package(const std::filesystem::path& requested_path) {
         result.report.add_error("io.unreadable", path.string(), "story package cannot be opened");
         return result;
     }
-    try {
-        const Json json = Json::parse(stream, nullptr, true, true);
-        auto package = read_package(json, result.report);
-        if (result.report.valid()) {
-            result.package = std::move(package);
-            result.report.append(validate_story_package(*result.package));
-        }
-    } catch (const Json::parse_error& exception) {
-        result.report.add_error("json.parse", path.string(), exception.what());
-    } catch (const Json::exception& exception) {
-        result.report.add_error("json.value", path.string(), exception.what());
+    const std::string content{std::istreambuf_iterator<char>{stream},
+                              std::istreambuf_iterator<char>{}};
+    if (stream.bad()) {
+        result.report.add_error("io.unreadable", path.string(), "story package cannot be read");
+        return result;
     }
-    return result;
+    return load_story_package_text(content);
 }
 
 } // namespace storyforge

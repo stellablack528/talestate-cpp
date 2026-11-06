@@ -148,6 +148,7 @@ struct AgentNpc {
     std::string name;
     SceneId scene;
     std::vector<AgentDialogueRule> dialogue_rules;
+    std::int64_t initial_relationship{0};
 };
 
 struct AgentObject {

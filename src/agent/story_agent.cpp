@@ -19,15 +19,21 @@ Json state_json(const StoryPackage& package, const StoryState& state) {
     Json result{{"turn", state.turn}, {"chapter", state.position.chapter.value()},
                 {"scene", state.position.scene.value()}, {"node", state.position.node.value()},
                 {"gold", state.gold}, {"variables", Json::object()},
-                {"inventory", Json::object()}, {"npc_memory", Json::object()},
+                {"inventory", Json::object()}, {"inventory_names", Json::object()},
+                {"npc_memory", Json::object()},
                 {"npc_relationships", Json::object()},
                 {"completed_events", Json::array()}, {"collected_objects", Json::array()}};
     if (const auto* scene = current_scene(package, state)) result["scene_title"] = scene->title;
     if (const auto* node = current_node(package, state)) result["scene_text"] = node->text;
     for (const auto& [id, value] : state.variables)
         result["variables"][id.value()] = value_json(value);
-    for (const auto& [id, quantity] : state.inventory)
+    for (const auto& [id, quantity] : state.inventory) {
         result["inventory"][id.value()] = quantity;
+        const auto found = std::find_if(package.agent_objects.begin(), package.agent_objects.end(),
+            [&](const AgentObject& object) { return object.item == id; });
+        if (found != package.agent_objects.end())
+            result["inventory_names"][id.value()] = found->name;
+    }
     for (const auto& [npc, memory] : state.npc_memory) {
         for (const auto& [key, value] : memory)
             result["npc_memory"][npc.value()][key] = value_json(value);
@@ -227,7 +233,7 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
              "Select 0-3 actions in causal order. Move only along listed routes, "
              "talk only to listed NPCs at the current or reached scene, and choose authored "
              "targets only from authorized_actions. Availability is shown for the initial state; "
-             "earlier actions in the same turn may unlock a route or change the current scene. "
+             "earlier actions in the same turn may unlock a route, evidence topic, or change the current scene. "
              "For an NPC's listed dialogue topic, use its exact topic id as the talk topic; "
              "the engine checks its conditions and applies only the author's approved outcome. "
              "Other free-form talk only records the discussion and grants no facts or effects. "

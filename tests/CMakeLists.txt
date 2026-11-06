@@ -10,6 +10,7 @@ add_executable(storyforge_tests
     save_tests.cpp
     validator_tests.cpp
     world_map_generator_tests.cpp
+    world_seed_generator_tests.cpp
 )
 target_link_libraries(storyforge_tests PRIVATE StoryForge::storyforge Catch2::Catch2WithMain)
 target_compile_definitions(storyforge_tests PRIVATE STORYFORGE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

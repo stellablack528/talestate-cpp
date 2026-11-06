@@ -57,3 +57,19 @@ TEST_CASE("world map generation repairs rejected topology without changing game 
     CHECK(provider.requests[0].response_format == storyforge::agent::ResponseFormat::json_object);
     CHECK(provider.requests[1].messages.size() == 4);
 }
+
+TEST_CASE("world seed map request keeps exactly three locations") {
+    QueueProvider provider;
+    auto larger = nlohmann::json::parse(valid_map);
+    larger["locations"].push_back({{"id", "island"}, {"title", "岛屿"},
+        {"description", "旁边的小岛"}, {"x", 3}, {"y", 4}});
+    larger["routes"].push_back({{"from", "cave"}, {"to", "island"}});
+    provider.responses = {
+        storyforge::agent::ChatResponse{larger.dump(), std::nullopt, {}},
+        storyforge::agent::ChatResponse{valid_map, std::nullopt, {}}
+    };
+    auto result = storyforge::agent::generate_world_map_draft("海上小世界", provider, 3);
+    REQUIRE(std::holds_alternative<storyforge::agent::WorldMapDraft>(result));
+    CHECK(std::get<storyforge::agent::WorldMapDraft>(result).locations.size() == 3);
+    CHECK(provider.requests.size() == 2);
+}

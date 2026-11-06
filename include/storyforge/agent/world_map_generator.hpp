@@ -34,7 +34,8 @@ using WorldMapResult = std::variant<WorldMapDraft, WorldMapError>;
 
 [[nodiscard]] WorldMapResult parse_world_map_draft(const std::string& json_text);
 [[nodiscard]] WorldMapResult generate_world_map_draft(const std::string& world_brief,
-                                                      ILlmProvider& provider);
+                                                      ILlmProvider& provider,
+                                                      std::size_t exact_locations = 0);
 [[nodiscard]] std::string serialize_world_map_draft(const WorldMapDraft& draft);
 
 } // namespace storyforge::agent

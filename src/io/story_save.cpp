@@ -175,7 +175,7 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
         for (const auto& [npc, value] : relationships.items()) {
             const auto score = integer(value);
             if (!valid_id(npc) || !score) return malformed();
-            state.npc_relationships.emplace(NpcId{npc}, *score);
+            state.npc_relationships[NpcId{npc}] = *score;
         }
 
         const auto& events = raw["completed_events"];

@@ -20,7 +20,7 @@
 
 项目追求的不是无限制的 AI 即兴创作，而是**受约束的生成式叙事（Constrained Generative Narrative）**：创作者决定世界与命运的边界，Agent 创造旅途中的道路，玩家决定如何行动，引擎保证世界规则始终可信。
 
-当前版本提供两种入口：命令行的固定选项玩法，以及可选构建的 **Qt 本地桌面原型**。桌面原型支持导入带 Agent 规则的世界包、填写自己的兼容模型 API、自然语言输入、Agent 规划与修复、C++ 权威状态裁决、生成式叙述以及手动存档／读档。通用行动协议 v1 支持带参数的跨场景移动、NPC 交谈、观察、拿取、给予与使用；示例包含钟塔学院与雾港两个不同世界。创作者也能输入世界观，让模型提议地点与路线，经 C++ 检查后预览、导出地图 JSON 草案。它仍是早期工具：地图草案尚不能直接游玩，人物、规则、剧情和结局还需补齐。
+当前版本提供两种入口：命令行的固定选项玩法，以及可选构建的 **Qt 本地桌面原型**。桌面原型支持导入带 Agent 规则的世界包、填写自己的兼容模型 API、自然语言输入、Agent 规划与修复、C++ 权威状态裁决、生成式叙述以及手动存档／读档。通用行动协议 v1 支持带参数的跨场景移动、NPC 交谈、观察、拿取、给予与使用；示例包含钟塔学院与雾港两个不同世界。创作者可以输入世界观生成地图草案，也可以进一步生成三地点、2–3 名人物、开局目标和三件可收集证据组成的探索世界包。证据进入背包后能解锁对应 NPC 的追问；寻找和交谈顺序不固定。生成包尚无自动生成的结局和复杂物品规则。
 
 ### English
 
@@ -34,7 +34,7 @@ The goal is constrained generative narrative rather than unrestricted AI improvi
 
 TaleState uses a BYOK model: users supply the endpoint, API key, and model of a compatible service. TaleState supplies the RPG-specific agent workflow, structured actions, validation, repair, and memory strategy, so model choice does not define the rules of the world.
 
-The current release also includes an optional Qt desktop prototype: import a world package, enter an OpenAI-compatible endpoint/key/model, type free-form actions, and see model planning, repair, narration, and C++-committed state. Manual saves restore authoritative world state without storing credentials or chat history. A parameterized action protocol supports movement, conversation, inspection, pickup, giving, and item use across two example worlds. Creators can also turn a world brief into a validated, previewable JSON map draft. Map drafts are not yet playable world packages; routes, NPC placement, game rules, and endings must still be authored and validated.
+The current release also includes an optional Qt desktop prototype: import a world package, enter an OpenAI-compatible endpoint/key/model, type free-form actions, and see model planning, repair, narration, and C++-committed state. Manual saves restore authoritative world state without storing credentials or chat history. A parameterized action protocol supports movement, conversation, inspection, pickup, giving, and item use across two example worlds. Creators can turn a world brief into a map draft or a three-location exploration package with an opening goal and two or three NPCs. The generated package can be loaded for exploration and conversation; generated endings and richer item rules remain future work.
 
 ---
 
@@ -92,6 +92,7 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 🔍 观察与拿取 | 用 `inspect` 查看当前场景对象的作者描述，用 `take` 拿走可拾取物品；拿过的对象读档后不会重现 |
 | 🎁 给予与使用 | 把背包物品交给在场 NPC，或对现场对象使用；具体后果由世界包声明并经 C++ 校验 |
 | 🗺️ 世界观地图草案 | 输入世界观后，通过 BYOK 模型提出地点与路线；C++ 检查唯一性、引用和可达性，在桌面端预览并导出 JSON 草案 |
+| 🌱 探索世界包初版 | 输入世界观后生成三地点、2–3 名 NPC、开局目标与三件可拿取证据；取得证据后可触发 NPC 追问，校验后保存 `story.json` 并在桌面端直接探索 |
 
 > 桌面原型已能处理自由文字；移动依赖世界包中的路线，交谈依赖 NPC 的位置，其余影响金币、物品、关系和结局的效果仍需创作者通过 `agent_actions` 授权。模型可以自由叙述，不能自由篡改事实。这是高自由工具的第一阶段，不等于任意行动都已有完整规则支持。
 
@@ -122,6 +123,7 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 🔄 跨平台 CI | GitHub Actions 在 Windows 与 Linux 上构建、测试并验证示例剧情包 |
 
 地图草案的设计来源与边界见 [世界观地图草案](docs/architecture/world-map-draft.md)。
+探索世界包当前的字段映射与阶段边界见 [最小探索世界包规格](docs/format/world-seed-v0.md)。
 
 ---
 
@@ -290,6 +292,7 @@ talestate-cpp/
 - [x] 跨两个世界的通用观察、拿取、重复拿取拒绝与存档恢复
 - [x] 跨两个世界的通用给予、使用与物品互动规则
 - [x] 世界观到地图 JSON 草案的生成、C++ 连通性校验、Qt 预览与导出
+- [x] 三地点探索世界包初版：开局目标、2–3 名 NPC、初始关系、可收集证据、条件追问与双向移动
 - [x] 结构化规划、最多一次修复、事实约束叙述与最近回合摘要
 - [x] 可选 Qt 本地界面与真实 HTTPS 传输
 - [x] 导入世界包、BYOK 配置、自由文字输入和权威状态展示
@@ -366,6 +369,8 @@ Windows 单配置构建可运行 `build/talestate_desktop.exe`；Visual Studio �
 核心项目代码仍采用 MIT；Qt 是可选的外部依赖。将桌面程序与 Qt 库一起发布前，应按 [Qt 官方许可说明](https://doc.qt.io/qt-6/licensing.html)核对所用 Qt 版本及分发义务。
 
 先在界面中填写兼容 API 地址、Key 和模型名，可直接点击“测试连接”，不需要导入世界包。它会向你填写的服务发送一次简短对话请求，**可能消耗少量 API 额度**；成功只证明基础对话可用，不保证剧情规划、JSON 模式或叙述质量。随后导入 [钟塔学院](examples/clockwork-academy/story.json) 或 [雾港](examples/harbor-lantern/story.json) 的 `story.json`，用自然语言行动。需要暂停时点击“保存进度”选择存档位置；下次打开程序后，**先导入同一 ID 和版本的世界包**，再点击“继续游戏”选择存档。存档只恢复权威世界状态，不恢复聊天文字和 Agent 最近回合摘要；模型地址、名称和 API Key 也不会写入存档，需要重新填写。API Key 不会出现在世界包与日志中；它会随请求发送给**你填写的**模型服务。请只使用你信任的 HTTPS 服务（本机模型服务可用 localhost HTTP）。
+
+需要从世界观开始时，点击“根据世界观生成探索世界包”，输入设定；程序先生成地图，再生成开局、NPC 与三件证据，校验通过后保存 `story.json` 并自动加载。当前生成包支持三个地点的探索、观察、拿取证据及依据背包证据追问 NPC；证据可按任意顺序收集。背包会显示证据名称。尚未自动生成结局或给予、使用等专门物品互动规则。独立的“根据世界观生成地图草案”仍可只预览与导出地点图。
 
 Agent 可组合世界包中声明的行动能力，并在 C++ 检查失败时重试一次。自由文字不代表可以任意改写世界；未声明的状态变化不会被提交。模型生成的叙述仍可能有表达错误，左侧权威状态才是游戏事实。
 
@@ -450,7 +455,7 @@ ctest --test-dir build -C Release --output-on-failure
 - 两个不同世界共用 `give` / `use` 协议、背包不足拒绝和物品效果原子提交
 - 最小连接请求、错误分类与本机模拟服务成功／认证失败测试
 
-当前基线：**53 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和 Qt 集成测试，本机合计 **55/55 通过**（集成测试内部覆盖连接响应、认证失败及真实文件存取）。
+当前基线：**56 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和 Qt 集成测试，本机合计 **58/58 通过**（集成测试内部覆盖连接响应、认证失败及真实文件存取）。
 
 其中模型接口测试使用内存中的假网络传输，不会读取真实 API Key、访问外部服务或产生模型费用。
 

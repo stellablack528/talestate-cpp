@@ -6,7 +6,7 @@
 SemVer 字符串。`entry` 指向初始章节、场景和节点；`variables` 声明有类型的初始
 变量；`chapters` 保存剧情树。可选的 `world_context` 描述世界设定；可选的
 `agent_actions` 声明创作者预设的行动能力；可选的 `agent_routes` 声明场景间可走路线，
-`agent_npcs` 声明可交谈 NPC 的位置和可选的对话规则；`agent_objects` 声明可观察对象及可拿取物品；`agent_item_rules` 声明物品与 NPC 或现场对象的互动。
+`agent_npcs` 声明可交谈 NPC 的位置、可选的对话规则及 `initial_relationship`（-100 至 100，默认 0）；`agent_objects` 声明可观察对象及可拿取物品；`agent_item_rules` 声明物品与 NPC 或现场对象的互动。
 
 所有 ID 建议使用小写 ASCII，并以命名空间前缀区分，例如 `chapter.arrival`、
 `scene.hall`。Schema 对 ID 的约束是 `^[a-z][a-z0-9_.-]*$`。

@@ -35,6 +35,7 @@ add_library(storyforge
     src/agent/openai_compatible_provider.cpp
     src/agent/story_agent.cpp
     src/agent/world_map_generator.cpp
+    src/agent/world_seed_generator.cpp
     src/io/story_loader.cpp
     src/io/story_save.cpp
     src/runtime/story_runtime.cpp

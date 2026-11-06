@@ -221,6 +221,9 @@ StoryState make_initial_state(const StoryPackage& package) {
     state.position = package.entry;
     for (const auto& variable : package.variables)
         state.variables.emplace(variable.id, variable.initial_value);
+    for (const auto& npc : package.agent_npcs)
+        if (npc.initial_relationship != 0)
+            state.npc_relationships.emplace(npc.id, npc.initial_relationship);
     return state;
 }
 
@@ -419,6 +422,18 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
             const auto rule = std::find_if(found->dialogue_rules.begin(), found->dialogue_rules.end(),
                 [&](const AgentDialogueRule& value) { return value.id == request.topic; });
             if (rule != found->dialogue_rules.end()) {
+                for (const auto& condition : rule->conditions) {
+                    if (const auto* required = std::get_if<HasItemCondition>(&condition.data);
+                        required && !evaluate_condition(condition, candidate)) {
+                        const auto object = std::find_if(package.agent_objects.begin(),
+                            package.agent_objects.end(), [&](const AgentObject& value) {
+                                return value.item == required->item;
+                            });
+                        return error(RuntimeErrorCode::condition_unmet,
+                            "背包里没有这个话题需要的物品：" +
+                            (object == package.agent_objects.end() ? required->item.value() : object->name));
+                    }
+                }
                 if (!std::all_of(rule->conditions.begin(), rule->conditions.end(),
                     [&](const StoryCondition& condition) { return evaluate_condition(condition, candidate); }))
                     return error(RuntimeErrorCode::condition_unmet,

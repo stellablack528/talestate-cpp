@@ -53,6 +53,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" }, "name": { "$ref": "#/$defs/nonEmptyString" },
         "scene": { "$ref": "#/$defs/id" },
+        "initial_relationship": { "type": "integer", "minimum": -100, "maximum": 100 },
         "dialogue_rules": { "type": "array", "items": { "$ref": "#/$defs/dialogueRule" } }
       }
     },
