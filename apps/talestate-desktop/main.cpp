@@ -35,6 +35,8 @@
 #include <QPainter>
 #include <QComboBox>
 #include <QSaveFile>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSplitter>
 #include <QTextBrowser>
 #include <QTextEdit>
@@ -118,15 +120,22 @@ public:
         root->setContentsMargins(22, 20, 22, 20);
         root->setSpacing(14);
         auto* heading = new QLabel("TaleState C++  ·  把你的世界交给玩家");
+        heading->setWordWrap(true);
         heading->setStyleSheet("font-size: 23px; font-weight: 700; color: #493723;");
         root->addWidget(heading);
 
         auto* splitter = new QSplitter(Qt::Horizontal);
         root->addWidget(splitter, 1);
+        auto* left_scroll = new QScrollArea;
+        left_scroll->setObjectName("leftPaneScroll");
+        left_scroll->setWidgetResizable(true);
+        left_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        left_scroll->setFrameShape(QFrame::NoFrame);
+        splitter->addWidget(left_scroll);
         auto* left = new QWidget;
         auto* left_layout = new QVBoxLayout(left);
         left_layout->setContentsMargins(0, 0, 8, 0);
-        splitter->addWidget(left);
+        left_scroll->setWidget(left);
 
         auto* world_group = new QGroupBox("世界包");
         auto* world_layout = new QVBoxLayout(world_group);
@@ -157,7 +166,11 @@ public:
         connect(continue_button_, &QPushButton::clicked, this, [this] { continue_game(); });
 
         auto* provider_group = new QGroupBox("你的模型 · BYOK");
-        auto* form = new QFormLayout(provider_group);
+        auto* provider_layout = new QVBoxLayout(provider_group);
+        provider_layout->setSpacing(8);
+        auto* form = new QFormLayout;
+        form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+        provider_layout->addLayout(form);
         provider_type_ = new QComboBox;
         provider_type_->setObjectName("providerTypeSelector");
         provider_type_->addItem("自定义 · OpenAI 兼容", "");
@@ -179,9 +192,10 @@ public:
         form->addRow("API Key", api_key_);
         form->addRow("模型", model_);
         auto* provider_hint = new QLabel("预设会填写官方默认地址；模型 ID 请从服务商控制台复制。也可修改地址，使用其他兼容服务。");
+        provider_hint->setObjectName("providerHint");
         provider_hint->setWordWrap(true);
         provider_hint->setStyleSheet("font-size: 12px; color: #756a5d;");
-        form->addRow(provider_hint);
+        provider_layout->addWidget(provider_hint);
         connect(provider_type_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                 [this](int index) {
                     base_url_->setText(provider_type_->itemData(index).toString());
@@ -193,10 +207,11 @@ public:
         test_connection_button_ = new QPushButton("测试连接");
         test_connection_button_->setObjectName("testConnectionButton");
         test_connection_status_ = new QLabel("尚未测试连接。测试会发送一次简短请求，可能消耗少量 API 额度。");
+        test_connection_status_->setObjectName("testConnectionStatus");
         test_connection_status_->setWordWrap(true);
         test_connection_status_->setStyleSheet("font-size: 12px; color: #756a5d;");
-        form->addRow(test_connection_button_);
-        form->addRow(test_connection_status_);
+        provider_layout->addWidget(test_connection_button_);
+        provider_layout->addWidget(test_connection_status_);
         connect(test_connection_button_, &QPushButton::clicked, this,
                 [this] { test_connection(); });
         const auto mark_untested = [this] {
@@ -209,9 +224,10 @@ public:
         connect(api_key_, &QLineEdit::textChanged, this, mark_untested);
         connect(model_, &QLineEdit::textChanged, this, mark_untested);
         auto* privacy = new QLabel("模型配置中的 Key 不写入世界包、存档或日志；请求直达你填写的模型服务。");
+        privacy->setObjectName("providerPrivacy");
         privacy->setWordWrap(true);
         privacy->setStyleSheet("font-size: 12px; color: #756a5d;");
-        form->addRow(privacy);
+        provider_layout->addWidget(privacy);
         left_layout->addWidget(provider_group);
 
         auto* state_group = new QGroupBox("世界事实 · 引擎裁定");
@@ -647,6 +663,27 @@ int main(int argc, char** argv) {
             selector->setCurrentIndex(index);
             if (base_url->text() != expected[index] || !api_key->text().isEmpty()) return 1;
         }
+    }
+    if (app.arguments().contains("--layout-test")) {
+        window.resize(860, 600);
+        auto* scroll = window.findChild<QScrollArea*>("leftPaneScroll");
+        auto* hint = window.findChild<QLabel*>("providerHint");
+        auto* button = window.findChild<QPushButton*>("testConnectionButton");
+        auto* status = window.findChild<QLabel*>("testConnectionStatus");
+        auto* privacy = window.findChild<QLabel*>("providerPrivacy");
+        if (!scroll || !hint || !button || !status || !privacy) return 1;
+        QTimer::singleShot(0, &app, [&] {
+            status->setText("模型配置中的地址或模型名称无效。请检查服务商控制台中的设置，"
+                            "然后重新测试连接；这段说明会随着窗口宽度自动换行。");
+            app.processEvents();
+            const bool separated = hint->geometry().bottom() < button->geometry().top() &&
+                button->geometry().bottom() < status->geometry().top() &&
+                status->geometry().bottom() < privacy->geometry().top();
+            const bool scrollable = scroll->verticalScrollBar()->maximum() > 0;
+            const auto screenshot = qEnvironmentVariable("TALESTATE_LAYOUT_SNAPSHOT");
+            if (!screenshot.isEmpty()) window.grab().save(screenshot);
+            app.exit(separated && scrollable ? 0 : 1);
+        });
     }
     window.show();
     if (app.arguments().contains("--smoke-test"))

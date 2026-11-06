@@ -73,6 +73,9 @@ if(STORYFORGE_BUILD_DESKTOP)
         if(STORYFORGE_BUILD_TESTS)
             add_test(NAME desktop_smoke COMMAND talestate_desktop --smoke-test)
             set_tests_properties(desktop_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+            add_test(NAME desktop_layout COMMAND talestate_desktop --layout-test)
+            set_tests_properties(desktop_layout PROPERTIES
+                ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_SCALE_FACTOR=1.5")
             add_executable(qt_transport_tests
                 tests/qt_transport_tests.cpp
                 apps/talestate-desktop/qt_http_transport.cpp
