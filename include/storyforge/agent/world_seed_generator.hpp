@@ -11,6 +11,7 @@ namespace storyforge::agent {
 struct WorldSeedDraft {
     std::string story_json;
     std::string opening_goal;
+    std::string world_spec_json;
 };
 struct WorldSeedError { std::string message; };
 using WorldSeedResult = std::variant<WorldSeedDraft, WorldSeedError>;

@@ -16,8 +16,10 @@
 
 #include <QApplication>
 #include <QDialog>
+#include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
@@ -467,9 +469,18 @@ private:
                     QMessageBox::warning(this, "保存失败", "无法写入世界包，请检查文件位置和权限。");
                     return;
                 }
+                const QFileInfo story_info(path);
+                const auto spec_path = story_info.dir().filePath(story_info.completeBaseName() + ".world-spec.json");
+                const auto spec_bytes = QByteArray::fromStdString(seed.world_spec_json);
+                QSaveFile spec_file(spec_path);
+                if (!spec_file.open(QIODevice::WriteOnly) ||
+                    spec_file.write(spec_bytes) != spec_bytes.size() || !spec_file.commit()) {
+                    QMessageBox::warning(this, "规则规格保存失败",
+                        "世界包已经保存，但无法保存旁边的世界规则规格文件。");
+                }
                 if (!load_world_from_path(path)) return;
                 QMessageBox::information(this, "探索世界已加载",
-                    "已生成三个地点和初始人物，可以开始探索与交谈。\n当前阶段尚未生成结局与复杂物品规则。\n目标：" +
+                    "已生成三个地点、证据、互动目标、身份与成长行动；同目录也保存了可查看的规则规格。\n当前阶段尚未生成结局。\n目标：" +
                     QString::fromStdString(seed.opening_goal));
             }, Qt::QueuedConnection);
         });

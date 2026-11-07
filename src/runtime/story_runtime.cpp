@@ -390,6 +390,26 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                 return error(RuntimeErrorCode::unknown_choice, "Agent 提出了未授权的行动：" + request.target);
             const StoryChoice choice{found->id, found->text, found->conditions,
                                      found->effects, found->target_node};
+            if (!choice_is_available(choice, candidate)) {
+                for (const auto& condition : found->conditions) {
+                    if (evaluate_condition(condition, candidate)) continue;
+                    if (std::holds_alternative<CurrentSceneCondition>(condition.data))
+                        return error(RuntimeErrorCode::condition_unmet, "当前地点不能执行这个行动");
+                    if (const auto* value = std::get_if<VariableComparison>(&condition.data)) {
+                        if (value->variable == VariableId{"var.identity"})
+                            return error(RuntimeErrorCode::condition_unmet,
+                                value->op == CompareOperator::equal ? "身份已经选定，不能重复选择" :
+                                "请先选择身份，再执行这个行动");
+                        return error(RuntimeErrorCode::condition_unmet,
+                            "属性条件、资源花费或数值上限未满足：" + value->variable.value());
+                    }
+                    if (const auto* negated = std::get_if<NotCondition>(&condition.data);
+                        negated && negated->condition &&
+                        std::holds_alternative<EventTriggeredCondition>(negated->condition->data))
+                        return error(RuntimeErrorCode::condition_unmet, "这个一次性行动已经执行过");
+                }
+                return error(RuntimeErrorCode::condition_unmet, "行动条件未满足");
+            }
             auto result = execute_choice(package, candidate, choice);
             if (auto* failure = std::get_if<RuntimeError>(&result)) return *failure;
             const auto& delta = std::get<StoryDelta>(result);
