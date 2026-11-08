@@ -1,4 +1,5 @@
 #include "qt_http_transport.hpp"
+#include "world_brief_dialog.hpp"
 
 #include "storyforge/agent/connection_check.hpp"
 #include "storyforge/agent/story_agent.hpp"
@@ -16,6 +17,7 @@
 
 #include <QApplication>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -26,12 +28,15 @@
 #include <QGraphicsView>
 #include <QGroupBox>
 #include <QHBoxLayout>
-#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QPushButton>
+#include <QPlainTextEdit>
 #include <QPen>
 #include <QBrush>
 #include <QPainter>
@@ -43,6 +48,7 @@
 #include <QTextBrowser>
 #include <QTextEdit>
 #include <QThread>
+#include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -180,6 +186,12 @@ public:
         demo_button_->setObjectName("loadDemoButton");
         world_layout->addWidget(demo_button_);
         world_layout->addWidget(import_button_);
+        brief_button_ = new QPushButton("填写／修改世界设定表");
+        brief_button_->setObjectName("editWorldBriefButton");
+        world_layout->addWidget(brief_button_);
+        brief_status_ = new QLabel("还没有填写世界设定；生成时会先打开设定表。", this);
+        brief_status_->setWordWrap(true);
+        world_layout->addWidget(brief_status_);
         map_button_ = new QPushButton("根据世界观生成地图草案");
         map_button_->setObjectName("generateMapButton");
         world_layout->addWidget(map_button_);
@@ -196,6 +208,7 @@ public:
         world_layout->addLayout(save_row);
         left_layout->addWidget(world_group);
         connect(import_button_, &QPushButton::clicked, this, [this] { import_world(); });
+        connect(brief_button_, &QPushButton::clicked, this, [this] { edit_world_brief(); });
         connect(demo_button_, &QPushButton::clicked, this, [this] {
             auto path = QDir(QCoreApplication::applicationDirPath()).filePath(
                 "examples/harbor-lantern/story.json");
@@ -314,6 +327,15 @@ public:
     }
 
 private:
+    bool edit_world_brief() {
+        if (busy_) return false;
+        WorldBriefDialog dialog(world_brief_draft_, this);
+        if (dialog.exec() != QDialog::Accepted) return false;
+        world_brief_draft_ = dialog.brief();
+        brief_status_->setText("世界设定已整理好，可生成地图或探索世界包；也可以随时修改或保存草稿。");
+        return true;
+    }
+
     [[nodiscard]] storyforge::agent::ProviderConfig provider_config() const {
         storyforge::agent::ProviderConfig config;
         config.base_url = base_url_->text().trimmed().toStdString();
@@ -326,6 +348,7 @@ private:
         busy_ = busy;
         send_button_->setEnabled(!busy);
         import_button_->setEnabled(!busy);
+        brief_button_->setEnabled(!busy);
         demo_button_->setEnabled(!busy);
         map_button_->setEnabled(!busy);
         seed_button_->setEnabled(!busy);
@@ -438,16 +461,11 @@ private:
             QMessageBox::warning(this, "模型配置不完整", QString::fromStdString(issues.front().message));
             return;
         }
-        bool accepted = false;
-        const auto brief = QInputDialog::getMultiLineText(this, "生成地图草案", "描述世界观、重要地点和探索方向：", {}, &accepted).trimmed();
-        if (!accepted) return;
-        if (brief.isEmpty() || brief.toUtf8().size() > 4000) {
-            QMessageBox::warning(this, "世界观长度不合适", "请填写不超过 4000 字节的世界观描述。");
-            return;
-        }
+        if (world_brief_draft_.isEmpty() && !edit_world_brief()) return;
+        const auto brief = world_brief_draft_.toStdString();
         set_busy(true);
         map_button_->setText("地图生成中…");
-        worker_ = QThread::create([this, config, brief = brief.toStdString()] {
+        worker_ = QThread::create([this, config, brief] {
             auto transport = std::make_shared<talestate_desktop::QtHttpTransport>();
             storyforge::agent::OpenAiCompatibleProvider provider(config, transport);
             auto result = storyforge::agent::generate_world_map_draft(brief, provider);
@@ -471,17 +489,11 @@ private:
             QMessageBox::warning(this, "模型配置不完整", QString::fromStdString(issues.front().message));
             return;
         }
-        bool accepted = false;
-        const auto brief = QInputDialog::getMultiLineText(this, "生成探索世界包",
-            "描述世界观、重要地点和想探索的冲突：", {}, &accepted).trimmed();
-        if (!accepted) return;
-        if (brief.isEmpty() || brief.toUtf8().size() > 4000) {
-            QMessageBox::warning(this, "世界观长度不合适", "请填写不超过 4000 字节的世界观描述。");
-            return;
-        }
+        if (world_brief_draft_.isEmpty() && !edit_world_brief()) return;
+        const auto brief = world_brief_draft_.toStdString();
         set_busy(true);
         seed_button_->setText("世界包生成中…");
-        worker_ = QThread::create([this, config, input = brief.toStdString()] {
+        worker_ = QThread::create([this, config, input = brief] {
             auto transport = std::make_shared<talestate_desktop::QtHttpTransport>();
             storyforge::agent::OpenAiCompatibleProvider provider(config, transport);
             auto map = storyforge::agent::generate_world_map_draft(input, provider, 3);
@@ -679,9 +691,12 @@ private:
     storyforge::StoryState state_;
     std::shared_ptr<storyforge::agent::StoryAgent> agent_;
     QThread* worker_{nullptr};
+    QByteArray world_brief_draft_;
     bool busy_{false};
     QLabel* world_label_{};
     QPushButton* import_button_{};
+    QPushButton* brief_button_{};
+    QLabel* brief_status_{};
     QPushButton* demo_button_{};
     QPushButton* map_button_{};
     QPushButton* seed_button_{};
@@ -703,6 +718,27 @@ private:
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
+    if (app.arguments().contains("--brief-test")) {
+        WorldBriefDialog draft({}, nullptr);
+        auto* table = draft.findChild<QTableWidget*>("worldBriefTable");
+        auto* add = draft.findChild<QPushButton*>("addWorldBriefRowButton");
+        auto* buttons = draft.findChild<QDialogButtonBox*>();
+        if (!table || !add || !buttons || table->rowCount() < 7) return 1;
+        auto* content = qobject_cast<QPlainTextEdit*>(table->cellWidget(0, 1));
+        if (!content) return 1;
+        content->setPlainText("海岸小镇的校园悬疑");
+        add->click();
+        table->item(table->rowCount() - 1, 0)->setText("自定义约束");
+        auto* custom = qobject_cast<QPlainTextEdit*>(table->cellWidget(table->rowCount() - 1, 1));
+        if (!custom) return 1;
+        custom->setPlainText("不使用超自然设定");
+        buttons->button(QDialogButtonBox::Ok)->click();
+        const auto json = QJsonDocument::fromJson(draft.brief());
+        if (!json.isObject() || json.object().value("fields").toArray().size() != 2) return 1;
+        WorldBriefDialog restored(draft.brief(), nullptr);
+        const auto* restored_table = restored.findChild<QTableWidget*>("worldBriefTable");
+        return restored_table && restored_table->rowCount() == 2 ? 0 : 1;
+    }
     MainWindow window;
     if (app.arguments().contains("--smoke-test")) {
         auto* selector = window.findChild<QComboBox*>("providerTypeSelector");

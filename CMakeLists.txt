@@ -62,6 +62,7 @@ if(STORYFORGE_BUILD_DESKTOP)
     if(Qt6_FOUND)
         add_executable(talestate_desktop
             apps/talestate-desktop/main.cpp
+            apps/talestate-desktop/world_brief_dialog.cpp
             apps/talestate-desktop/qt_http_transport.cpp
         )
         target_link_libraries(talestate_desktop PRIVATE StoryForge::storyforge Qt6::Widgets Qt6::Network)
@@ -77,6 +78,8 @@ if(STORYFORGE_BUILD_DESKTOP)
             add_test(NAME desktop_layout COMMAND talestate_desktop --layout-test)
             set_tests_properties(desktop_layout PROPERTIES
                 ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_SCALE_FACTOR=1.5")
+            add_test(NAME world_brief_form COMMAND talestate_desktop --brief-test)
+            set_tests_properties(world_brief_form PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
             add_executable(qt_transport_tests
                 tests/qt_transport_tests.cpp
                 apps/talestate-desktop/qt_http_transport.cpp
