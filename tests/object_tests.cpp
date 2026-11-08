@@ -144,6 +144,10 @@ TEST_CASE("invalid object declarations and forged collected objects are rejected
     auto json = nlohmann::json::parse(std::get<std::string>(encoded));
     auto older = json;
     older["state"].erase("collected_objects");
+    older["state"].erase("world_minute");
+    older["state"].erase("appointments");
+    older["state"].erase("dynamic_facts");
+    older["state"].erase("event_log");
     auto older_result = storyforge::deserialize_story_save(package, older.dump());
     REQUIRE(std::holds_alternative<storyforge::StoryState>(older_result));
     CHECK(std::get<storyforge::StoryState>(older_result).collected_objects.empty());

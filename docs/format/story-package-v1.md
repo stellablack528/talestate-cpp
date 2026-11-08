@@ -6,7 +6,7 @@
 SemVer 字符串。`entry` 指向初始章节、场景和节点；`variables` 声明有类型的初始
 变量；`chapters` 保存剧情树。可选的 `world_context` 描述世界设定；可选的
 `agent_actions` 声明创作者预设的行动能力；可选的 `agent_routes` 声明场景间可走路线，
-`agent_npcs` 声明可交谈 NPC 的位置、可选的对话规则及 `initial_relationship`（-100 至 100，默认 0）；`agent_objects` 声明可观察对象及可拿取物品；`agent_item_rules` 声明物品与 NPC 或现场对象的互动。
+`agent_npcs` 声明可交谈 NPC 的位置、可选的对话规则及 `initial_relationship`（-100 至 100，默认 0）；`agent_objects` 声明可观察对象及可拿取物品；`agent_item_rules` 声明物品与 NPC 或现场对象的互动；`agent_appointments` 声明可预约的 NPC 日程。
 
 所有 ID 建议使用小写 ASCII，并以命名空间前缀区分，例如 `chapter.arrival`、
 `scene.hall`。Schema 对 ID 的约束是 `^[a-z][a-z0-9_.-]*$`。
@@ -39,6 +39,27 @@ Agent 以结构化请求提交 `type`、`target` 和交谈时的 `topic`。`type
 - `take`：`target` 为当前场景中带 `item` 字段的对象 ID；引擎把一件物品加入背包并记下对象已被拿走。不可拿取、已被拿走或不在场的对象都会被拒绝。
 - `give`：`item` 为背包物品 ID，`target` 为当前地点 NPC ID。必须有匹配的 `agent_item_rules`；成功后转交一件物品，再执行创作者声明的效果。
 - `use`：`item` 为背包物品 ID，`target` 为当前地点对象 ID。必须有匹配的 `agent_item_rules`；`consume: true` 时消耗一件物品，默认保留。
+- `wait`：`target` 是 `1` 至 `240` 的整数字符串，表示经过多少分钟。已预约但错过结束时间的约定会标为失约。
+- `book`：`target` 为 `agent_appointments` 中的 ID。玩家须与指定 NPC 同地，且尚未到约定开始时间；已有预约不能与它重叠，也不能重复预约。
+- `attend`：`target` 为已预约的约定 ID。玩家须在指定地点，并处于约定的开始与结束时间之间；完成后记录已赴约，不能重复完成。
+- `investigate`：`target` 为当前地点对象 ID，`id` 是新的 `fact.*` ID，`topic` 是短线索。引擎只确认玩家从这个对象进行了调查；线索标为**待核实**，不能当作已证明的真相。
+- `promise`：`target` 为在场 NPC ID，`id` 为新的事实 ID，`topic` 为承诺内容，`due_minute` 为开局起算的未来期限。到期未履约记为违约。
+- `fulfill` / `break_promise`：`target` 为已有且进行中的承诺事实 ID。履约要求与承诺对象同地；已处理的承诺不能重复领奖或反复处理。
+- `ask_help`：向在场 NPC 记录求助请求。请求本身不代表 NPC 已答应，也不改变资源。
+- `plan_event`：提出一项与在场 NPC 有关的计划；它先作为待执行计划保存，不代表 NPC 已经参加。
+- `attend_plan`：在计划时间起 60 分钟内与相关 NPC 同场，才将计划记录为已发生；错过时间窗口则过期。
+
+新事实必须具有唯一的 `fact.*` ID、现场来源和不超过 280 字节的单行描述。动态事实与事件记录进入权威状态和存档；整个行动组合失败时全部回滚。当前 C++ 校验来源、身份、时间与重复项，不能从自然语言中证明任意新剧情陈述为真，因此调查内容只能作为待核实线索。
+
+时间从开局的第 0 分钟开始。第一版只有成功执行 `wait` 才推进时间；移动、交谈等普通行动尚无自动耗时。世界包中的约定使用从开局起算的分钟，`start_minute` 取 1 至 10080，`duration_minutes` 取 1 至 240，且结束时间不超过 10080。约定状态和当前时间随游戏进度保存；API Key 不进入存档。
+
+```json
+"agent_appointments": [
+  { "id": "appointment.meet-alan", "title": "与阿澜核对潮汐记录",
+    "npc": "npc.alan", "scene": "scene.dock",
+    "start_minute": 60, "duration_minutes": 30 }
+]
+```
 
 世界包中的声明示意：
 

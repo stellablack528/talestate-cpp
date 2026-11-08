@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -73,7 +74,9 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
         {"turn", state.turn}, {"gold", state.gold},
         {"variables", Json::object()}, {"inventory", Json::object()},
         {"npc_memory", Json::object()}, {"npc_relationships", Json::object()},
-        {"completed_events", Json::array()}, {"collected_objects", Json::array()}};
+        {"completed_events", Json::array()}, {"collected_objects", Json::array()},
+        {"world_minute", state.world_minute}, {"appointments", Json::object()},
+        {"dynamic_facts", Json::object()}, {"event_log", Json::array()}};
     for (const auto& [id, value] : state.variables)
         saved_state["variables"][id.value()] = value_json(value);
     for (const auto& [id, quantity] : state.inventory)
@@ -89,6 +92,15 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
         saved_state["completed_events"].push_back(event.value());
     for (const auto& object : state.collected_objects)
         saved_state["collected_objects"].push_back(object);
+    for (const auto& [id, status] : state.appointments)
+        saved_state["appointments"][id] = status == AppointmentStatus::booked ? "booked" :
+            status == AppointmentStatus::attended ? "attended" : "missed";
+    for (const auto& [id, fact] : state.dynamic_facts)
+        saved_state["dynamic_facts"][id] = {{"kind", fact.kind}, {"source", fact.source},
+            {"text", fact.text}, {"status", fact.status}, {"due_minute", fact.due_minute}};
+    for (const auto& event : state.event_log)
+        saved_state["event_log"].push_back({{"type", event.type}, {"fact_id", event.fact_id},
+            {"turn", event.turn}, {"minute", event.minute}});
 
     const Json save{{"format", "talestate.save/v1"},
                     {"world", {{"id", package.id.value()}, {"version", package.version}}},
@@ -120,7 +132,13 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                              "存档与当前世界包的 ID 或版本不一致，请导入原来的世界包。当前进度未改变。"};
 
         const auto& raw = save["state"];
-        const bool current_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+        const bool dynamic_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+                              "npc_memory", "npc_relationships", "completed_events", "collected_objects",
+                              "world_minute", "appointments", "dynamic_facts", "event_log"});
+        const bool temporal_format = dynamic_format || has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+                              "npc_memory", "npc_relationships", "completed_events", "collected_objects",
+                              "world_minute", "appointments"});
+        const bool current_format = temporal_format || has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
                               "npc_memory", "npc_relationships", "completed_events", "collected_objects"});
         const bool older_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
                               "npc_memory", "npc_relationships", "completed_events"});
@@ -139,6 +157,108 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
         if (current_node(package, state) == nullptr) return malformed("存档中的地点不存在于当前世界包。");
         state.turn = raw["turn"].get<std::uint64_t>();
         state.gold = *gold;
+        if (temporal_format) {
+            if (!raw["world_minute"].is_number_unsigned() || !raw["appointments"].is_object())
+                return malformed();
+            state.world_minute = raw["world_minute"].get<std::uint64_t>();
+            for (const auto& [id, value] : raw["appointments"].items()) {
+                if (!valid_id(id) || !value.is_string()) return malformed();
+                const auto appointment = std::find_if(package.agent_appointments.begin(),
+                    package.agent_appointments.end(), [&](const AgentAppointment& item) {
+                        return item.id == id;
+                    });
+                if (appointment == package.agent_appointments.end()) return malformed();
+                const auto status = value.get<std::string>();
+                if (status == "booked" && state.world_minute < appointment->start_minute + appointment->duration_minutes)
+                    state.appointments.emplace(id, AppointmentStatus::booked);
+                else if (status == "attended" && state.world_minute >= appointment->start_minute)
+                    state.appointments.emplace(id, AppointmentStatus::attended);
+                else if (status == "missed" && state.world_minute >= appointment->start_minute + appointment->duration_minutes)
+                    state.appointments.emplace(id, AppointmentStatus::missed);
+                else return malformed();
+            }
+            for (std::size_t i = 0; i < package.agent_appointments.size(); ++i) {
+                const auto& first = package.agent_appointments[i];
+                if (state.appointments.find(first.id) == state.appointments.end() ||
+                    state.appointments.at(first.id) != AppointmentStatus::booked) continue;
+                for (std::size_t j = i + 1; j < package.agent_appointments.size(); ++j) {
+                    const auto& second = package.agent_appointments[j];
+                    if (state.appointments.find(second.id) == state.appointments.end() ||
+                        state.appointments.at(second.id) != AppointmentStatus::booked) continue;
+                    if (first.start_minute < second.start_minute + second.duration_minutes &&
+                        second.start_minute < first.start_minute + first.duration_minutes)
+                        return malformed("存档包含时间冲突的约定，当前进度未改变。");
+                }
+            }
+        }
+        if (dynamic_format) {
+            if (!raw["dynamic_facts"].is_object() || !raw["event_log"].is_array() ||
+                raw["dynamic_facts"].size() > 128 || raw["event_log"].size() > 512) return malformed();
+            for (const auto& [id, value] : raw["dynamic_facts"].items()) {
+                if (!valid_id(id) || id.rfind("fact.", 0) != 0 ||
+                    !has_fields(value, {"kind", "source", "text", "status", "due_minute"}) ||
+                    !value["kind"].is_string() || !value["source"].is_string() ||
+                    !value["text"].is_string() || !value["status"].is_string() ||
+                    !value["due_minute"].is_number_unsigned()) return malformed();
+                const auto kind = value["kind"].get<std::string>();
+                const auto status = value["status"].get<std::string>();
+                const auto source = value["source"].get<std::string>();
+                const auto content = value["text"].get<std::string>();
+                const auto due = value["due_minute"].get<std::uint64_t>();
+                if ((kind != "lead" && kind != "promise" && kind != "help_request" && kind != "planned_event") ||
+                    (status != "open" && status != "broken" && status != "fulfilled" &&
+                     status != "occurred" && status != "expired") ||
+                    content.empty() || content.size() > 280 || !valid_id(source) ||
+                    (due > state.world_minute && due - state.world_minute > 10080)) return malformed();
+                const bool object_source = std::any_of(package.agent_objects.begin(), package.agent_objects.end(),
+                    [&](const AgentObject& object) { return object.id == source; });
+                const bool npc_source = std::any_of(package.agent_npcs.begin(), package.agent_npcs.end(),
+                    [&](const AgentNpc& npc) { return npc.id.value() == source; });
+                if ((kind == "lead" ? !object_source : !npc_source) ||
+                    ((kind == "lead" || kind == "help_request") && (status != "open" || due != 0)) ||
+                    (kind == "planned_event" && (due == 0 ||
+                        (status != "open" && status != "occurred" && status != "expired"))) ||
+                    (kind == "promise" && (due == 0 || status == "occurred"))) return malformed();
+                state.dynamic_facts.emplace(id, DynamicFact{id, kind, source, content, status, due});
+            }
+            for (const auto& value : raw["event_log"]) {
+                if (!has_fields(value, {"type", "fact_id", "turn", "minute"}) ||
+                    !value["type"].is_string() || !value["fact_id"].is_string() ||
+                    !value["turn"].is_number_unsigned() || !value["minute"].is_number_unsigned())
+                    return malformed();
+                const auto id = value["fact_id"].get<std::string>();
+                const auto turn = value["turn"].get<std::uint64_t>();
+                const auto minute = value["minute"].get<std::uint64_t>();
+                if (!state.dynamic_facts.contains(id) || turn > state.turn || minute > state.world_minute)
+                    return malformed();
+                state.event_log.push_back({value["type"].get<std::string>(), id, turn, minute});
+            }
+            std::map<std::string, std::string> replayed;
+            std::uint64_t last_turn = 0;
+            std::uint64_t last_minute = 0;
+            for (const auto& event : state.event_log) {
+                if (event.turn < last_turn || event.minute < last_minute) return malformed();
+                last_turn = event.turn;
+                last_minute = event.minute;
+                const auto& fact = state.dynamic_facts.at(event.fact_id);
+                if (event.type == "created") {
+                    if (replayed.contains(event.fact_id) ||
+                        (fact.due_minute && (fact.due_minute <= event.minute ||
+                         fact.due_minute - event.minute > 10080))) return malformed();
+                    replayed[event.fact_id] = "open";
+                } else {
+                    const auto found = replayed.find(event.fact_id);
+                    if (found == replayed.end() || found->second != "open" ||
+                        (fact.kind == "promise" && event.type != "fulfilled" && event.type != "broken") ||
+                        (fact.kind == "planned_event" && event.type != "occurred" && event.type != "expired") ||
+                        (fact.kind != "promise" && fact.kind != "planned_event")) return malformed();
+                    found->second = event.type;
+                }
+            }
+            if (replayed.size() != state.dynamic_facts.size()) return malformed();
+            for (const auto& [id, fact] : state.dynamic_facts)
+                if (replayed.at(id) != fact.status) return malformed();
+        }
 
         const auto& variables = raw["variables"];
         if (!variables.is_object() || variables.size() != state.variables.size()) return malformed();

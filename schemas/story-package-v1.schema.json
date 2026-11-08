@@ -18,7 +18,8 @@
     "agent_routes": { "type": "array", "items": { "$ref": "#/$defs/agentRoute" } },
     "agent_npcs": { "type": "array", "items": { "$ref": "#/$defs/agentNpc" } },
     "agent_objects": { "type": "array", "items": { "$ref": "#/$defs/agentObject" } },
-    "agent_item_rules": { "type": "array", "items": { "$ref": "#/$defs/agentItemRule" } }
+    "agent_item_rules": { "type": "array", "items": { "$ref": "#/$defs/agentItemRule" } },
+    "agent_appointments": { "type": "array", "items": { "$ref": "#/$defs/agentAppointment" } }
   },
   "$defs": {
     "nonEmptyString": { "type": "string", "minLength": 1 },
@@ -55,6 +56,18 @@
         "scene": { "$ref": "#/$defs/id" },
         "initial_relationship": { "type": "integer", "minimum": -100, "maximum": 100 },
         "dialogue_rules": { "type": "array", "items": { "$ref": "#/$defs/dialogueRule" } }
+      }
+    },
+    "agentAppointment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "npc", "scene", "start_minute", "duration_minutes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "npc": { "$ref": "#/$defs/id" },
+        "scene": { "$ref": "#/$defs/id" },
+        "start_minute": { "type": "integer", "minimum": 1, "maximum": 10080 },
+        "duration_minutes": { "type": "integer", "minimum": 1, "maximum": 240 }
       }
     },
     "agentObject": {

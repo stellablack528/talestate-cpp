@@ -58,7 +58,38 @@ QString state_summary(const storyforge::StoryPackage& package,
     QString result;
     if (const auto* scene = storyforge::current_scene(package, state))
         result += "📍 " + QString::fromStdString(scene->title) + "\n";
-    result += "回合 " + QString::number(state.turn) + "　金币 " + QString::number(state.gold) + "\n\n";
+    result += "回合 " + QString::number(state.turn) + "　世界时间 第 " +
+        QString::number(state.world_minute / 1440 + 1) + " 天 " +
+        QString("%1:%2").arg((state.world_minute % 1440) / 60, 2, 10, QLatin1Char('0'))
+                         .arg(state.world_minute % 60, 2, 10, QLatin1Char('0')) +
+        "　金币 " + QString::number(state.gold) + "\n\n";
+    if (!package.agent_appointments.empty()) {
+        result += "约定\n";
+        for (const auto& appointment : package.agent_appointments) {
+            const auto found = state.appointments.find(appointment.id);
+            const auto status = found == state.appointments.end() ?
+                (state.world_minute < appointment.start_minute ? "可预约" : "已过预约时间") :
+                found->second == storyforge::AppointmentStatus::booked ? "已约定" :
+                found->second == storyforge::AppointmentStatus::attended ? "已履行" : "已错过";
+            result += "  " + QString::fromStdString(appointment.title) + " · " + status +
+                " · 第 " + QString::number(appointment.start_minute / 1440 + 1) + " 天 " +
+                QString("%1:%2").arg((appointment.start_minute % 1440) / 60, 2, 10, QLatin1Char('0'))
+                                 .arg(appointment.start_minute % 60, 2, 10, QLatin1Char('0')) + "\n";
+        }
+        result += "\n";
+    }
+    if (!state.dynamic_facts.empty()) {
+        result += "\n持续事件与承诺\n";
+        for (const auto& [id, fact] : state.dynamic_facts) {
+            (void)id;
+            const auto label = fact.status == "open" ? "进行中" :
+                fact.status == "fulfilled" ? "已履行" :
+                fact.status == "broken" ? "已失约" :
+                fact.status == "expired" ? "已过期" : "已发生";
+            result += "  " + QString::fromStdString(fact.text) + " · " +
+                label + "\n";
+        }
+    }
     result += "背包\n";
     if (state.inventory.empty()) result += "  空\n";
     for (const auto& [item, quantity] : state.inventory) {
@@ -145,6 +176,9 @@ public:
         world_label_->setWordWrap(true);
         import_button_ = new QPushButton("导入世界包 story.json");
         world_layout->addWidget(world_label_);
+        demo_button_ = new QPushButton("一键载入示例世界 · 雾港灯塔");
+        demo_button_->setObjectName("loadDemoButton");
+        world_layout->addWidget(demo_button_);
         world_layout->addWidget(import_button_);
         map_button_ = new QPushButton("根据世界观生成地图草案");
         map_button_->setObjectName("generateMapButton");
@@ -162,6 +196,17 @@ public:
         world_layout->addLayout(save_row);
         left_layout->addWidget(world_group);
         connect(import_button_, &QPushButton::clicked, this, [this] { import_world(); });
+        connect(demo_button_, &QPushButton::clicked, this, [this] {
+            auto path = QDir(QCoreApplication::applicationDirPath()).filePath(
+                "examples/harbor-lantern/story.json");
+            if (!QFileInfo::exists(path))
+                path = QString::fromUtf8(STORYFORGE_SOURCE_DIR) + "/examples/harbor-lantern/story.json";
+            if (!QFileInfo::exists(path)) {
+                QMessageBox::warning(this, "示例世界缺失", "请重新解压完整的 TaleState 发布包。");
+                return;
+            }
+            load_world_from_path(path);
+        });
         connect(map_button_, &QPushButton::clicked, this, [this] { generate_map(); });
         connect(seed_button_, &QPushButton::clicked, this, [this] { generate_seed(); });
         connect(save_button_, &QPushButton::clicked, this, [this] { save_game(); });
@@ -281,6 +326,7 @@ private:
         busy_ = busy;
         send_button_->setEnabled(!busy);
         import_button_->setEnabled(!busy);
+        demo_button_->setEnabled(!busy);
         map_button_->setEnabled(!busy);
         seed_button_->setEnabled(!busy);
         save_button_->setEnabled(!busy);
@@ -636,6 +682,7 @@ private:
     bool busy_{false};
     QLabel* world_label_{};
     QPushButton* import_button_{};
+    QPushButton* demo_button_{};
     QPushButton* map_button_{};
     QPushButton* seed_button_{};
     QPushButton* save_button_{};

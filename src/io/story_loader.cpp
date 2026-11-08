@@ -317,7 +317,7 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
         return {};
     }
     StoryPackage package;
-    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "agent_actions", "agent_routes", "agent_npcs", "agent_objects", "agent_item_rules"}, report);
+    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "agent_actions", "agent_routes", "agent_npcs", "agent_objects", "agent_item_rules", "agent_appointments"}, report);
     package.format = read_string(json, "format", "", report);
     package.id = StoryId{read_id(json, "id", "", report)};
     package.title = read_string(json, "title", "", report);
@@ -416,6 +416,22 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
                 }
             }
             package.agent_npcs.push_back(std::move(npc));
+        }
+    }
+    if (const auto it = json.find("agent_appointments"); it != json.end()) {
+        if (!it->is_array()) type_error(report, "/agent_appointments", "array");
+        else for (std::size_t i = 0; i < it->size(); ++i) {
+            const auto path = "/agent_appointments/" + std::to_string(i);
+            const auto& raw = (*it)[i];
+            reject_unknown_properties(raw, path,
+                {"id", "title", "npc", "scene", "start_minute", "duration_minutes"}, report);
+            const auto start = read_integer(raw, "start_minute", path, report);
+            const auto duration = read_integer(raw, "duration_minutes", path, report);
+            package.agent_appointments.push_back({read_id(raw, "id", path, report),
+                read_string(raw, "title", path, report), NpcId{read_id(raw, "npc", path, report)},
+                SceneId{read_id(raw, "scene", path, report)},
+                start < 0 ? 0U : static_cast<std::uint64_t>(start),
+                duration < 0 ? 0U : static_cast<std::uint64_t>(duration)});
         }
     }
     if (const auto it = json.find("agent_objects"); it != json.end()) {

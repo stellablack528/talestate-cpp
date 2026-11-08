@@ -39,14 +39,16 @@ public:
             if (!queued.empty()) {
                 auto next = nlohmann::json::parse(queued.front(), nullptr, false);
                 queued.erase(queued.begin());
-                if (next.is_object() && next.contains("npcs"))
+                if (next.is_object() && next.contains("npcs") && next.contains("appointments"))
                     return storyforge::agent::ChatResponse{
-                        nlohmann::json{{"npcs", next["npcs"]}}.dump(), {}, {}};
+                        nlohmann::json{{"npcs", next["npcs"]},
+                                       {"appointments", next["appointments"]}}.dump(), {}, {}};
                 return storyforge::agent::ChatResponse{"{}", {}, {}};
             }
-            if (details.is_object() && details.contains("npcs"))
+            if (details.is_object() && details.contains("npcs") && details.contains("appointments"))
                 return storyforge::agent::ChatResponse{
-                    nlohmann::json{{"npcs", details["npcs"]}}.dump(), {}, {}};
+                    nlohmann::json{{"npcs", details["npcs"]},
+                                   {"appointments", details["appointments"]}}.dump(), {}, {}};
             return storyforge::agent::ChatResponse{"{}", {}, {}};
         }
         if (!queued.empty()) {
@@ -87,6 +89,9 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
             npc["event_topic"] = "询问控制台记录";
             npc["event_reply"] = "控制台记录证实了你的调查。";
         }
+        details["appointments"] = nlohmann::json::array({{{"id", "meeting"},
+            {"title", "约定会面"}, {"npc", "gate_keeper"}, {"scene", "hall"},
+            {"start_minute", 60}, {"duration_minutes", 30}}});
         if (title == "魔法学园") {
             details["world_spec"] = {
                 {"attributes", {{{"id", "focus"}, {"name", "专注"}, {"initial", 3}, {"min", 0}, {"max", 6}},
@@ -132,6 +137,7 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
         CHECK(sidecar["start_scene"] == "gate");
         REQUIRE(package.variables.size() == 3);
         REQUIRE(package.agent_actions.size() == 3);
+        REQUIRE(package.agent_appointments.size() == 1);
         const auto identity_id = title == "魔法学园" ? "scholar" : "engineer";
         const auto resource_id = title == "魔法学园" ? "energy" : "battery";
         const auto growth_id = title == "魔法学园" ? "focus" : "signal";

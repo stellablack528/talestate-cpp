@@ -8,6 +8,7 @@ add_executable(storyforge_tests
     runtime_tests.cpp
     replay_tests.cpp
     save_tests.cpp
+    temporal_rules_tests.cpp
     validator_tests.cpp
     world_map_generator_tests.cpp
     world_seed_generator_tests.cpp

@@ -331,6 +331,19 @@ ValidationReport validate_story_package(const StoryPackage& package) {
         }
     }
 
+    std::set<std::string> appointment_ids;
+    for (std::size_t i = 0; i < package.agent_appointments.size(); ++i) {
+        const auto& value = package.agent_appointments[i];
+        const auto path = "/agent_appointments/" + std::to_string(i);
+        require_unique(appointment_ids, value.id, path + "/id", "appointment", report);
+        if (value.title.empty() || !npc_ids.contains(value.npc.value()) ||
+            !scene_ids.contains(value.scene.value()) || value.start_minute < 1 ||
+            value.start_minute > 10080 || value.duration_minutes < 1 ||
+            value.duration_minutes > 240 || value.start_minute + value.duration_minutes > 10080)
+            report.add_error("semantic.invalid_appointment", path,
+                "appointment needs a valid NPC, scene, title and a 1-10080 minute time window");
+    }
+
     std::set<std::string> object_ids;
     for (std::size_t i = 0; i < package.agent_objects.size(); ++i) {
         const auto& object = package.agent_objects[i];
