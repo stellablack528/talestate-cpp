@@ -1,5 +1,7 @@
 # TaleState C++ 📖
 
+<img src="assets/brand/talestate-icon.png" alt="TaleState 水彩书页图标" width="112">
+
 > Bring your own model. The model understands and narrates; the C++ engine enforces the world's rules.
 >
 > 用户自带 API Key，让现成大模型负责理解、规划和叙述，由 C++ 引擎维护可信的游戏世界。

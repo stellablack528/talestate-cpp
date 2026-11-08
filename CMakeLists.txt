@@ -2,10 +2,14 @@ cmake_minimum_required(VERSION 3.24)
 
 project(
     StoryForgeCpp
-    VERSION 0.1.0
+    VERSION 0.1.1
     DESCRIPTION "A deterministic, data-driven story engine for text RPGs"
     LANGUAGES CXX
 )
+
+if(WIN32)
+    enable_language(RC)
+endif()
 
 include(FetchContent)
 
@@ -18,13 +22,13 @@ option(STORYFORGE_BUILD_DESKTOP "Build the optional Qt desktop player" ON)
 
 FetchContent_Declare(
     nlohmann_json
-    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
-    URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+    URL https://codeload.github.com/nlohmann/json/tar.gz/refs/tags/v3.11.3
+    URL_HASH SHA256=0d8ef5af7f9794e3263480193c491549b2ba6cc74bb018906202ada498a79406
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_Declare(
     CLI11
-    URL https://github.com/CLIUtils/CLI11/archive/refs/tags/v2.4.2.tar.gz
+    URL https://codeload.github.com/CLIUtils/CLI11/tar.gz/refs/tags/v2.4.2
     URL_HASH SHA256=f2d893a65c3b1324c50d4e682c0cdc021dd0477ae2c048544f39eed6654b699a
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
@@ -64,7 +68,12 @@ if(STORYFORGE_BUILD_DESKTOP)
             apps/talestate-desktop/main.cpp
             apps/talestate-desktop/world_brief_dialog.cpp
             apps/talestate-desktop/qt_http_transport.cpp
+            assets/brand/talestate.qrc
         )
+        set_target_properties(talestate_desktop PROPERTIES AUTORCC ON)
+        if(WIN32)
+            target_sources(talestate_desktop PRIVATE apps/talestate-desktop/talestate.rc)
+        endif()
         target_link_libraries(talestate_desktop PRIVATE StoryForge::storyforge Qt6::Widgets Qt6::Network)
         target_compile_definitions(talestate_desktop PRIVATE STORYFORGE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
         if(MSVC)

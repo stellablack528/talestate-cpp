@@ -28,6 +28,7 @@
 #include <QGraphicsView>
 #include <QGroupBox>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QJsonDocument>
@@ -718,6 +719,7 @@ private:
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
+    app.setWindowIcon(QIcon(":/brand/icon.png"));
     if (app.arguments().contains("--brief-test")) {
         WorldBriefDialog draft({}, nullptr);
         auto* table = draft.findChild<QTableWidget*>("worldBriefTable");

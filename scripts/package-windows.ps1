@@ -1,7 +1,7 @@
 param(
     [string]$BuildDir = "build",
     [string]$QtBin = "E:\QT\6.10.1\mingw_64\bin",
-    [string]$Version = "0.1.0"
+    [string]$Version = "0.1.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,8 +27,11 @@ Copy-Item -LiteralPath $exe -Destination (Join-Path $out "TaleState.exe")
 if ($LASTEXITCODE -ne 0) { throw "Qt 依赖打包失败。" }
 Copy-Item -LiteralPath (Join-Path $root "examples") -Destination (Join-Path $out "examples") -Recurse
 Copy-Item -LiteralPath (Join-Path $root "LICENSE") -Destination $out
-Copy-Item -LiteralPath (Join-Path $root "RELEASE-v0.1.0.md") -Destination (Join-Path $out "使用说明.md")
+Copy-Item -LiteralPath (Join-Path $root "RELEASE-v$Version.md") -Destination (Join-Path $out "使用说明.md")
 $archive = Join-Path $root "dist\TaleState-$Version-win64.zip"
 if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
 Compress-Archive -LiteralPath $out -DestinationPath $archive
+$hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText((Join-Path $dist "SHA256SUMS.txt"),
+    "$hash  TaleState-$Version-win64.zip`n", [Text.UTF8Encoding]::new($false))
 Write-Output $archive

@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/brand">
+    <file alias="icon.png">talestate-icon.png</file>
+  </qresource>
+</RCC>
