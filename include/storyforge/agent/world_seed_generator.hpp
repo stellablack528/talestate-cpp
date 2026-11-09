@@ -6,6 +6,7 @@
 #include <variant>
 
 namespace storyforge::agent {
+struct WorldSetting;
 
 // First-stage world package: explorable scenes and conversations, without endings.
 struct WorldSeedDraft {
@@ -17,6 +18,7 @@ struct WorldSeedError { std::string message; };
 using WorldSeedResult = std::variant<WorldSeedDraft, WorldSeedError>;
 
 [[nodiscard]] WorldSeedResult generate_world_seed_from_map(
-    const WorldMapDraft& map, const std::string& world_brief, ILlmProvider& provider);
+    const WorldMapDraft& map, const std::string& world_brief, ILlmProvider& provider,
+    const WorldSetting* setting = nullptr);
 
 } // namespace storyforge::agent

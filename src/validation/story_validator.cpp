@@ -243,6 +243,50 @@ ValidationReport validate_story_package(const StoryPackage& package) {
         }
     }
 
+    std::set<std::string> role_ids;
+    for (const auto& [kind, entries] : package.world_lore) {
+        if (kind != "facts" && kind != "rumors" && kind != "secrets" &&
+            kind != "rules" && kind != "style")
+            report.add_error("semantic.invalid_lore", "/world_lore/" + kind, "unknown lore category");
+        if (entries.size() > 6144)
+            report.add_error("semantic.invalid_lore", "/world_lore/" + kind, "too many entries");
+        for (const auto& entry : entries)
+            if (entry.empty() || entry.size() > 1000)
+                report.add_error("semantic.invalid_lore", "/world_lore/" + kind, "entry must be 1-1000 bytes");
+    }
+    if (package.player_roles.size() > 12)
+        report.add_error("semantic.invalid_role", "/player_roles", "too many player roles");
+    for (std::size_t i = 0; i < package.player_roles.size(); ++i) {
+        const auto& role = package.player_roles[i];
+        const auto path = "/player_roles/" + std::to_string(i);
+        require_unique(role_ids, role.id, path + "/id", "player role", report);
+        if (role.name.empty() || role.name.size() > 120 || role.description.size() > 500 ||
+            role.attributes.empty() || role.attributes.size() > 8 || role.starting_items.size() > 8)
+            report.add_error("semantic.invalid_role", path, "role needs a name, 1-8 attributes, and at most 8 items");
+        for (const auto& [name, value] : role.attributes)
+            if (name.empty() || name.size() > 40 || value < -1000000 || value > 1000000)
+                report.add_error("semantic.invalid_role", path + "/attributes", "attribute is out of range");
+        for (const auto& [item, count] : role.starting_items)
+            if (item.empty() || count < 1 || count > 10)
+                report.add_error("semantic.invalid_role", path + "/starting_items", "item count must be 1-10");
+        for (const auto& [item, name] : role.item_names)
+            if (!role.starting_items.contains(item) || name.empty() || name.size() > 120)
+                report.add_error("semantic.invalid_role", path + "/item_names", "item name must match a starting item");
+        if ((role.fixed_name && (role.fixed_name->empty() || role.fixed_name->size() > 120)) ||
+            role.starting_gold < 0 || role.starting_gold > 1000000 ||
+            role.editable_fields.size() > 8 || role.traits.size() > 12 ||
+            role.trait_count > role.traits.size())
+            report.add_error("semantic.invalid_role", path, "invalid character creation options");
+        std::set<std::string> labels;
+        for (const auto& label : role.editable_fields)
+            if (label.empty() || label.size() > 80 || !labels.insert(label).second)
+                report.add_error("semantic.invalid_role", path + "/editable_fields", "field labels must be unique and short");
+        labels.clear();
+        for (const auto& label : role.traits)
+            if (label.empty() || label.size() > 80 || !labels.insert(label).second)
+                report.add_error("semantic.invalid_role", path + "/traits", "traits must be unique and short");
+    }
+
     std::set<std::string> agent_action_ids;
     for (std::size_t i = 0; i < package.agent_actions.size(); ++i) {
         const auto& action = package.agent_actions[i];

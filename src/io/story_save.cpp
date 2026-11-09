@@ -76,7 +76,13 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
         {"npc_memory", Json::object()}, {"npc_relationships", Json::object()},
         {"completed_events", Json::array()}, {"collected_objects", Json::array()},
         {"world_minute", state.world_minute}, {"appointments", Json::object()},
-        {"dynamic_facts", Json::object()}, {"event_log", Json::array()}};
+        {"dynamic_facts", Json::object()}, {"event_log", Json::array()},
+        {"player", nullptr}};
+    if (state.player) {
+        saved_state["player"] = {{"name", state.player->name}, {"role", state.player->role},
+            {"background", state.player->background}, {"attributes", state.player->attributes},
+            {"custom_fields", state.player->custom_fields}, {"traits", state.player->traits}};
+    }
     for (const auto& [id, value] : state.variables)
         saved_state["variables"][id.value()] = value_json(value);
     for (const auto& [id, quantity] : state.inventory)
@@ -132,7 +138,10 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                              "存档与当前世界包的 ID 或版本不一致，请导入原来的世界包。当前进度未改变。"};
 
         const auto& raw = save["state"];
-        const bool dynamic_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+        const bool player_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+                              "npc_memory", "npc_relationships", "completed_events", "collected_objects",
+                              "world_minute", "appointments", "dynamic_facts", "event_log", "player"});
+        const bool dynamic_format = player_format || has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
                               "npc_memory", "npc_relationships", "completed_events", "collected_objects",
                               "world_minute", "appointments", "dynamic_facts", "event_log"});
         const bool temporal_format = dynamic_format || has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
@@ -151,6 +160,54 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
         if (!gold || *gold < 0) return malformed();
 
         StoryState state = make_initial_state(package);
+        if (player_format && !raw["player"].is_null()) {
+            const auto& player = raw["player"];
+            if ((!has_fields(player, {"name", "role", "background", "attributes"}) &&
+                 !has_fields(player, {"name", "role", "background", "attributes", "custom_fields", "traits"})) ||
+                !player["name"].is_string() || !player["role"].is_string() ||
+                !player["background"].is_string() || !player["attributes"].is_object()) return malformed();
+            PlayerProfile profile{player["name"].get<std::string>(), player["role"].get<std::string>(),
+                player["background"].get<std::string>(), {}, {}, {}};
+            if (profile.name.empty() || profile.name.size() > 120 || profile.background.size() > 500 ||
+                player["attributes"].size() > 8) return malformed();
+            const auto role = std::find_if(package.player_roles.begin(), package.player_roles.end(),
+                [&](const PlayerRole& value) { return value.id == profile.role; });
+            if (role == package.player_roles.end() && profile.role != "role.traveler") return malformed();
+            for (const auto& [name, value] : player["attributes"].items()) {
+                const auto number = integer(value);
+                if (name.empty() || name.size() > 40 || !number || *number < -1000000 || *number > 1000000)
+                    return malformed();
+                profile.attributes.emplace(name, *number);
+            }
+            if (role != package.player_roles.end() && profile.attributes != role->attributes) return malformed();
+            if (role != package.player_roles.end()) {
+                if (role->fixed_name && profile.name != *role->fixed_name) return malformed();
+                if (player.contains("custom_fields")) {
+                    if (!player["custom_fields"].is_object() ||
+                        player["custom_fields"].size() != role->editable_fields.size()) return malformed();
+                    for (const auto& label : role->editable_fields) {
+                        const auto value = player["custom_fields"].find(label);
+                        if (value == player["custom_fields"].end() || !value->is_string() ||
+                            value->get<std::string>().empty() || value->get<std::string>().size() > 240)
+                            return malformed();
+                        profile.custom_fields[label] = value->get<std::string>();
+                    }
+                } else if (!role->editable_fields.empty()) return malformed();
+                if (player.contains("traits")) {
+                    if (!player["traits"].is_array() || player["traits"].size() != role->trait_count)
+                        return malformed();
+                    std::set<std::string> selected;
+                    for (const auto& value : player["traits"]) {
+                        if (!value.is_string()) return malformed();
+                        const auto trait = value.get<std::string>();
+                        if (std::find(role->traits.begin(), role->traits.end(), trait) == role->traits.end() ||
+                            !selected.insert(trait).second) return malformed();
+                        profile.traits.push_back(trait);
+                    }
+                } else if (role->trait_count != 0) return malformed();
+            }
+            state.player = std::move(profile);
+        }
         state.position = {ChapterId{position["chapter"].get<std::string>()},
                           SceneId{position["scene"].get<std::string>()},
                           NodeId{position["node"].get<std::string>()}};

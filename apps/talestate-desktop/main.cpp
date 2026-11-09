@@ -5,11 +5,13 @@
 #include "storyforge/agent/story_agent.hpp"
 #include "storyforge/agent/world_map_generator.hpp"
 #include "storyforge/agent/world_seed_generator.hpp"
+#include "storyforge/agent/world_setting.hpp"
 #include "storyforge/io/story_loader.hpp"
 #include "storyforge/io/story_save.hpp"
 
 #include <memory>
 #include <algorithm>
+#include <cmath>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -42,6 +44,7 @@
 #include <QBrush>
 #include <QPainter>
 #include <QComboBox>
+#include <QCheckBox>
 #include <QSaveFile>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -63,8 +66,43 @@ QString safe(const std::string& value) {
 QString state_summary(const storyforge::StoryPackage& package,
                       const storyforge::StoryState& state) {
     QString result;
+    if (state.player) {
+        result += "角色 · " + QString::fromStdString(state.player->name) + "\n";
+        const auto role = std::find_if(package.player_roles.begin(), package.player_roles.end(),
+            [&](const storyforge::PlayerRole& value) { return value.id == state.player->role; });
+        result += "身份 · " + (role == package.player_roles.end() ? "自定义角色" :
+            QString::fromStdString(role->name)) + "\n";
+        result += "背景 · " + QString::fromStdString(state.player->background) + "\n";
+        for (const auto& [label, value] : state.player->custom_fields)
+            result += QString::fromStdString(label + " · " + value) + "\n";
+        if (!state.player->traits.empty()) {
+            result += "特质 · ";
+            for (const auto& trait : state.player->traits)
+                result += QString::fromStdString(trait) + " ";
+            result += "\n";
+        }
+        for (const auto& [name, score] : storyforge::current_player_attributes(package, state))
+            result += "  " + QString::fromStdString(name) + " " + QString::number(score) + "\n";
+        result += "\n";
+    }
     if (const auto* scene = storyforge::current_scene(package, state))
         result += "📍 " + QString::fromStdString(scene->title) + "\n";
+    result += "地图 · 已知地点\n";
+    for (const auto& chapter : package.chapters)
+        for (const auto& scene : chapter.scenes) {
+            const bool here = scene.id == state.position.scene;
+            const bool adjacent = std::any_of(package.agent_routes.begin(), package.agent_routes.end(),
+                [&](const storyforge::AgentRoute& route) {
+                    return route.from == state.position.scene && route.to == scene.id &&
+                        std::all_of(route.conditions.begin(), route.conditions.end(),
+                            [&](const storyforge::StoryCondition& condition) {
+                                return storyforge::evaluate_condition(condition, state);
+                            });
+                });
+            result += "  " + QString::fromStdString(scene.title) +
+                (here ? " · 当前" : adjacent ? " · 可前往" : " · 未连通") + "\n";
+        }
+    result += "\n";
     result += "回合 " + QString::number(state.turn) + "　世界时间 第 " +
         QString::number(state.world_minute / 1440 + 1) + " 天 " +
         QString("%1:%2").arg((state.world_minute % 1440) / 60, 2, 10, QLatin1Char('0'))
@@ -102,7 +140,15 @@ QString state_summary(const storyforge::StoryPackage& package,
     for (const auto& [item, quantity] : state.inventory) {
         const auto found = std::find_if(package.agent_objects.begin(), package.agent_objects.end(),
             [&](const storyforge::AgentObject& object) { return object.item == item; });
-        const auto& label = found == package.agent_objects.end() ? item.value() : found->name;
+        std::string label = found == package.agent_objects.end() ? item.value() : found->name;
+        if (found == package.agent_objects.end() && state.player) {
+            const auto role = std::find_if(package.player_roles.begin(), package.player_roles.end(),
+                [&](const storyforge::PlayerRole& value) { return value.id == state.player->role; });
+            if (role != package.player_roles.end()) {
+                const auto named = role->item_names.find(item);
+                if (named != role->item_names.end()) label = named->second;
+            }
+        }
         result += "  " + QString::fromStdString(label) + " ×" + QString::number(quantity) + "\n";
     }
     result += "\n世界变量\n";
@@ -187,6 +233,12 @@ public:
         demo_button_->setObjectName("loadDemoButton");
         world_layout->addWidget(demo_button_);
         world_layout->addWidget(import_button_);
+        character_button_ = new QPushButton("创建／重建角色");
+        character_button_->setObjectName("createCharacterButton");
+        world_layout->addWidget(character_button_);
+        world_map_button_ = new QPushButton("查看世界地图");
+        world_map_button_->setObjectName("viewWorldMapButton");
+        world_layout->addWidget(world_map_button_);
         brief_button_ = new QPushButton("填写／修改世界设定表");
         brief_button_->setObjectName("editWorldBriefButton");
         world_layout->addWidget(brief_button_);
@@ -209,6 +261,8 @@ public:
         world_layout->addLayout(save_row);
         left_layout->addWidget(world_group);
         connect(import_button_, &QPushButton::clicked, this, [this] { import_world(); });
+        connect(character_button_, &QPushButton::clicked, this, [this] { create_character(); });
+        connect(world_map_button_, &QPushButton::clicked, this, [this] { show_world_map(); });
         connect(brief_button_, &QPushButton::clicked, this, [this] { edit_world_brief(); });
         connect(demo_button_, &QPushButton::clicked, this, [this] {
             auto path = QDir(QCoreApplication::applicationDirPath()).filePath(
@@ -327,6 +381,42 @@ public:
         if (worker_ && worker_->isRunning()) worker_->wait();
     }
 
+    bool test_character_creation(const QString& path) {
+        QTimer::singleShot(0, this, [this] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (!dialog) return;
+            auto* name = dialog->findChild<QLineEdit*>("characterName");
+            auto* role = dialog->findChild<QComboBox*>("characterRole");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!name || !role || !buttons || role->count() < 1) { dialog->reject(); return; }
+            if (!name->isReadOnly()) name->setText("Avery");
+            for (auto* input : dialog->findChildren<QLineEdit*>())
+                if (input != name && !input->isReadOnly()) input->setText("test value");
+            auto checks = dialog->findChildren<QCheckBox*>();
+            const auto selected = std::find_if(package_->player_roles.begin(), package_->player_roles.end(),
+                [&](const storyforge::PlayerRole& value) {
+                    return value.id == role->currentData().toString().toStdString();
+                });
+            const auto needed = selected == package_->player_roles.end() ? std::size_t{0} : selected->trait_count;
+            for (std::size_t i = 0; i < std::min(needed, static_cast<std::size_t>(checks.size())); ++i)
+                checks[static_cast<qsizetype>(i)]->setChecked(true);
+            buttons->button(QDialogButtonBox::Ok)->click();
+        });
+        if (!load_world_from_path(path) || !state_.player || state_.player->name != "Avery") return false;
+        if (!package_->player_roles.empty() && state_.inventory != package_->player_roles.front().starting_items)
+            return false;
+        if (!package_->player_roles.empty() &&
+            (state_.gold != package_->player_roles.front().starting_gold ||
+             state_.player->custom_fields.size() != package_->player_roles.front().editable_fields.size() ||
+             state_.player->traits.size() != package_->player_roles.front().trait_count)) return false;
+        const auto encoded = storyforge::serialize_story_save(*package_, state_);
+        if (!std::holds_alternative<std::string>(encoded)) return false;
+        const auto restored = storyforge::deserialize_story_save(*package_, std::get<std::string>(encoded));
+        return std::holds_alternative<storyforge::StoryState>(restored) &&
+            std::get<storyforge::StoryState>(restored) == state_ &&
+            state_view_->toPlainText().contains("地图");
+    }
+
 private:
     bool edit_world_brief() {
         if (busy_) return false;
@@ -349,6 +439,8 @@ private:
         busy_ = busy;
         send_button_->setEnabled(!busy);
         import_button_->setEnabled(!busy);
+        character_button_->setEnabled(!busy);
+        world_map_button_->setEnabled(!busy);
         brief_button_->setEnabled(!busy);
         demo_button_->setEnabled(!busy);
         map_button_->setEnabled(!busy);
@@ -469,7 +561,16 @@ private:
         worker_ = QThread::create([this, config, brief] {
             auto transport = std::make_shared<talestate_desktop::QtHttpTransport>();
             storyforge::agent::OpenAiCompatibleProvider provider(config, transport);
-            auto result = storyforge::agent::generate_world_map_draft(brief, provider);
+            std::string compact = brief;
+            storyforge::agent::WorldMapResult result;
+            if (brief.size() > 4000) {
+                const auto setting = storyforge::agent::prepare_world_setting(brief, provider);
+                if (const auto* failure = std::get_if<storyforge::agent::WorldSettingError>(&setting))
+                    result = storyforge::agent::WorldMapError{failure->message};
+                else compact = std::get<storyforge::agent::WorldSetting>(setting).compact_brief;
+            }
+            if (compact.size() <= 4000 && !std::holds_alternative<storyforge::agent::WorldMapError>(result))
+                result = storyforge::agent::generate_world_map_draft(compact, provider);
             QMetaObject::invokeMethod(this, [this, result = std::move(result)] {
                 set_busy(false);
                 map_button_->setText("根据世界观生成地图草案");
@@ -497,12 +598,19 @@ private:
         worker_ = QThread::create([this, config, input = brief] {
             auto transport = std::make_shared<talestate_desktop::QtHttpTransport>();
             storyforge::agent::OpenAiCompatibleProvider provider(config, transport);
-            auto map = storyforge::agent::generate_world_map_draft(input, provider, 3);
             storyforge::agent::WorldSeedResult result;
-            if (const auto* failure = std::get_if<storyforge::agent::WorldMapError>(&map))
+            const auto setting = storyforge::agent::prepare_world_setting(input, provider);
+            if (const auto* failure = std::get_if<storyforge::agent::WorldSettingError>(&setting))
                 result = storyforge::agent::WorldSeedError{failure->message};
-            else result = storyforge::agent::generate_world_seed_from_map(
-                std::get<storyforge::agent::WorldMapDraft>(map), input, provider);
+            else {
+                const auto& prepared = std::get<storyforge::agent::WorldSetting>(setting);
+                auto map = storyforge::agent::generate_world_map_draft(prepared.compact_brief, provider, 3);
+                if (const auto* failure = std::get_if<storyforge::agent::WorldMapError>(&map))
+                    result = storyforge::agent::WorldSeedError{failure->message};
+                else result = storyforge::agent::generate_world_seed_from_map(
+                    std::get<storyforge::agent::WorldMapDraft>(map), prepared.compact_brief,
+                    provider, &prepared);
+            }
             QMetaObject::invokeMethod(this, [this, result = std::move(result)] {
                 set_busy(false);
                 seed_button_->setText("根据世界观生成探索世界包");
@@ -575,15 +683,222 @@ private:
         agent_ = std::make_shared<storyforge::agent::StoryAgent>();
         world_label_->setText(QString::fromStdString(package_->title) + "\n" + path);
         story_view_->clear();
+        append_story("系统", "世界包已导入。请先创建角色，再进入故事；已有存档可点“继续游戏”。");
+        state_view_->setPlainText(state_summary(*package_, state_));
+        create_character();
+        return true;
+    }
+
+    void create_character() {
+        if (busy_ || !package_) return;
+        if (state_.player && (state_.turn > 0 || !state_.completed_events.empty())) {
+            if (QMessageBox::question(this, "重新创建角色",
+                "这会从当前世界的开局重新开始，已进行的剧情会丢失。要继续吗？") != QMessageBox::Yes) return;
+        }
+        QDialog dialog(this);
+        dialog.setWindowTitle("创建角色 · " + QString::fromStdString(package_->title));
+        dialog.resize(520, 420);
+        auto* layout = new QVBoxLayout(&dialog);
+        auto* hint = new QLabel("先决定你是谁。角色属性和起始物品由世界包设定，确认后才进入剧情。");
+        hint->setWordWrap(true);
+        layout->addWidget(hint);
+        auto* name = new QLineEdit;
+        name->setObjectName("characterName");
+        name->setMaxLength(40);
+        name->setPlaceholderText("你的名字或昵称");
+        auto* role = new QComboBox;
+        role->setObjectName("characterRole");
+        if (package_->player_roles.empty()) role->addItem("自定义角色", "role.traveler");
+        else for (const auto& option : package_->player_roles)
+            role->addItem(QString::fromStdString(option.name), QString::fromStdString(option.id));
+        auto* background = new QTextEdit;
+        background->setObjectName("characterBackground");
+        background->setPlaceholderText("写几句来历、性格或进入这个世界的原因；可以留空。");
+        background->setFixedHeight(85);
+        auto* extra_widget = new QWidget;
+        auto* extra_form = new QFormLayout(extra_widget);
+        std::vector<std::pair<std::string, QLineEdit*>> custom_inputs;
+        std::vector<std::pair<std::string, QCheckBox*>> trait_inputs;
+        auto* role_details = new QLabel;
+        role_details->setObjectName("characterRoleDetails");
+        role_details->setWordWrap(true);
+        auto update_role = [this, role, role_details, name, extra_form,
+                            &custom_inputs, &trait_inputs] {
+            while (auto* row = extra_form->takeAt(0)) {
+                if (auto* widget = row->widget()) widget->deleteLater();
+                delete row;
+            }
+            custom_inputs.clear();
+            trait_inputs.clear();
+            const auto id = role->currentData().toString().toStdString();
+            const auto found = std::find_if(package_->player_roles.begin(), package_->player_roles.end(),
+                [&](const storyforge::PlayerRole& value) { return value.id == id; });
+            if (found == package_->player_roles.end()) {
+                name->setReadOnly(false);
+                role_details->setText("初始属性：体魄 5、洞察 5、交际 5、意志 5；背包为空。这个世界包尚未定义起始身份。");
+                return;
+            }
+            name->setReadOnly(found->fixed_name.has_value());
+            name->setText(found->fixed_name ? QString::fromStdString(*found->fixed_name) : QString{});
+            for (const auto& label : found->editable_fields) {
+                auto* input = new QLineEdit;
+                input->setMaxLength(80);
+                input->setPlaceholderText("填写 " + QString::fromStdString(label));
+                extra_form->addRow(QString::fromStdString(label), input);
+                custom_inputs.emplace_back(label, input);
+            }
+            for (const auto& trait : found->traits) {
+                auto* check = new QCheckBox(QString::fromStdString(trait));
+                extra_form->addRow("特质", check);
+                trait_inputs.emplace_back(trait, check);
+            }
+            QString details = QString::fromStdString(found->description) + "\n初始属性：";
+            for (const auto& [key, value] : found->attributes)
+                details += " " + QString::fromStdString(key) + " " + QString::number(value);
+            details += "\n起始金币：" + QString::number(found->starting_gold);
+            if (found->trait_count) details += "\n请选择 " + QString::number(found->trait_count) + " 项特质";
+            details += "\n初始背包：";
+            if (found->starting_items.empty()) details += "空";
+            for (const auto& [item, count] : found->starting_items)
+                details += " " + QString::fromStdString(found->item_names.contains(item) ?
+                    found->item_names.at(item) : item.value()) + " ×" + QString::number(count);
+            role_details->setText(details);
+        };
+        connect(role, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog,
+                [update_role](int) { update_role(); });
+        update_role();
+        auto* form = new QFormLayout;
+        form->addRow("名字", name);
+        form->addRow("身份", role);
+        form->addRow("背景", background);
+        layout->addLayout(form);
+        layout->addWidget(extra_widget);
+        layout->addWidget(role_details);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        buttons->button(QDialogButtonBox::Ok)->setText("确认角色，进入世界");
+        buttons->button(QDialogButtonBox::Cancel)->setText("稍后读档");
+        layout->addWidget(buttons);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+            if (name->text().trimmed().isEmpty()) {
+                QMessageBox::information(&dialog, "填写名字", "先给角色取一个名字。 ");
+                return;
+            }
+            const auto selected = std::count_if(trait_inputs.begin(), trait_inputs.end(),
+                [](const auto& entry) { return entry.second->isChecked(); });
+            const auto current_role = std::find_if(package_->player_roles.begin(), package_->player_roles.end(),
+                [&](const storyforge::PlayerRole& value) {
+                    return value.id == role->currentData().toString().toStdString();
+                });
+            if (current_role != package_->player_roles.end() &&
+                selected != static_cast<int>(current_role->trait_count)) {
+                QMessageBox::information(&dialog, "选择特质",
+                    "请选择恰好 " + QString::number(current_role->trait_count) + " 项特质。 ");
+                return;
+            }
+            for (const auto& [label, input] : custom_inputs)
+                if (input->text().trimmed().isEmpty()) {
+                    QMessageBox::information(&dialog, "补全角色设定",
+                        "请填写：" + QString::fromStdString(label));
+                    return;
+                }
+            dialog.accept();
+        });
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        if (dialog.exec() != QDialog::Accepted) return;
+        state_ = storyforge::make_initial_state(*package_);
+        const auto id = role->currentData().toString().toStdString();
+        const auto found = std::find_if(package_->player_roles.begin(), package_->player_roles.end(),
+            [&](const storyforge::PlayerRole& value) { return value.id == id; });
+        storyforge::PlayerProfile player{name->text().trimmed().toStdString(), id,
+            background->toPlainText().trimmed().left(120).toStdString(), {}, {}, {}};
+        if (found == package_->player_roles.end())
+            player.attributes = {{"体魄", 5}, {"洞察", 5}, {"交际", 5}, {"意志", 5}};
+        else {
+            player.attributes = found->attributes;
+            state_.inventory = found->starting_items;
+            state_.gold = found->starting_gold;
+            for (const auto& [label, input] : custom_inputs)
+                player.custom_fields[label] = input->text().trimmed().toStdString();
+            for (const auto& [trait, check] : trait_inputs)
+                if (check->isChecked()) player.traits.push_back(trait);
+            const auto identity = state_.variables.find(storyforge::VariableId{"var.identity"});
+            if (identity != state_.variables.end() && id.rfind("role.", 0) == 0)
+                identity->second = id.substr(5);
+            for (const auto& [attribute, score] : found->attributes) {
+                const auto variable = state_.variables.find(
+                    storyforge::VariableId{"var.attribute." + attribute});
+                if (variable != state_.variables.end()) variable->second = score;
+            }
+        }
+        state_.player = std::move(player);
+        agent_ = std::make_shared<storyforge::agent::StoryAgent>();
+        story_view_->clear();
+        append_story("角色建立", "你是 " + state_.player->name + "。" + state_.player->background);
         append_story("世界", storyforge::current_node(*package_, state_)->text);
         state_view_->setPlainText(state_summary(*package_, state_));
-        return true;
+    }
+
+    void show_world_map() {
+        if (!package_) {
+            QMessageBox::information(this, "先导入世界", "导入世界包后才能查看地点与路线。");
+            return;
+        }
+        QDialog dialog(this);
+        dialog.setWindowTitle("世界地图 · " + QString::fromStdString(package_->title));
+        dialog.resize(680, 540);
+        auto* layout = new QVBoxLayout(&dialog);
+        auto* note = new QLabel("实线为当前可以通行的路线；虚线表示需要先满足世界条件。黄色地点是你的位置。");
+        note->setWordWrap(true);
+        layout->addWidget(note);
+        auto* picture = new QGraphicsScene(&dialog);
+        std::vector<const storyforge::StoryScene*> scenes;
+        for (const auto& chapter : package_->chapters)
+            for (const auto& scene : chapter.scenes) scenes.push_back(&scene);
+        std::map<storyforge::SceneId, QPointF> positions;
+        for (std::size_t i = 0; i < scenes.size(); ++i) {
+            const double angle = -std::acos(-1.0) / 2 +
+                2 * std::acos(-1.0) * static_cast<double>(i) / static_cast<double>(scenes.size());
+            positions.emplace(scenes[i]->id, QPointF(300 + 210 * std::cos(angle),
+                                                       220 + 145 * std::sin(angle)));
+        }
+        for (const auto& route : package_->agent_routes) {
+            if (!positions.contains(route.from) || !positions.contains(route.to)) continue;
+            const bool available = std::all_of(route.conditions.begin(), route.conditions.end(),
+                [&](const storyforge::StoryCondition& condition) {
+                    return storyforge::evaluate_condition(condition, state_);
+                });
+            QPen pen(QColor(available ? "#7b9b81" : "#b9b1a4"), 3);
+            if (!available) pen.setStyle(Qt::DashLine);
+            picture->addLine(QLineF(positions.at(route.from), positions.at(route.to)), pen);
+        }
+        for (const auto* scene : scenes) {
+            const auto at = positions.at(scene->id);
+            const bool here = scene->id == state_.position.scene;
+            picture->addEllipse(at.x() - 15, at.y() - 15, 30, 30,
+                QPen(QColor("#554436"), 2),
+                QBrush(QColor(here ? "#e4b45e" : "#fffdf8")));
+            auto* label = picture->addText(QString::fromStdString(scene->title));
+            label->setDefaultTextColor(QColor("#2f2d2a"));
+            label->setPos(at.x() - label->boundingRect().width() / 2, at.y() + 20);
+        }
+        picture->setSceneRect(0, 0, 620, 440);
+        auto* view = new QGraphicsView(picture);
+        view->setRenderHint(QPainter::Antialiasing);
+        layout->addWidget(view, 1);
+        auto* close = new QPushButton("返回游戏");
+        layout->addWidget(close, 0, Qt::AlignRight);
+        connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+        dialog.exec();
     }
 
     void save_game() {
         if (busy_) return;
         if (!package_) {
             QMessageBox::information(this, "先导入世界", "请先导入要游玩的世界包，再保存进度。");
+            return;
+        }
+        if (!state_.player) {
+            QMessageBox::information(this, "先创建角色", "请先创建角色，或读取已有存档。");
             return;
         }
         const auto encoded = storyforge::serialize_story_save(*package_, state_);
@@ -628,6 +943,12 @@ private:
             return;
         }
         state_ = std::get<storyforge::StoryState>(decoded);
+        if (!state_.player) {
+            QMessageBox::information(this, "旧存档缺少角色",
+                "这份旧存档没有角色资料。需要先创建角色才能进入故事；创建后会从开局开始。 ");
+            create_character();
+            return;
+        }
         agent_ = std::make_shared<storyforge::agent::StoryAgent>();
         action_input_->clear();
         story_view_->clear();
@@ -644,6 +965,10 @@ private:
     void send_turn() {
         if (busy_ || !package_) {
             if (!package_) QMessageBox::information(this, "先导入世界", "请选择一个含 Agent 行动规则的世界包。");
+            return;
+        }
+        if (!state_.player) {
+            QMessageBox::information(this, "先创建角色", "请先填写名字和身份，或读取已有存档。");
             return;
         }
         const auto input = action_input_->toPlainText().trimmed().toStdString();
@@ -696,6 +1021,8 @@ private:
     bool busy_{false};
     QLabel* world_label_{};
     QPushButton* import_button_{};
+    QPushButton* character_button_{};
+    QPushButton* world_map_button_{};
     QPushButton* brief_button_{};
     QLabel* brief_status_{};
     QPushButton* demo_button_{};
@@ -733,15 +1060,20 @@ int main(int argc, char** argv) {
         table->item(table->rowCount() - 1, 0)->setText("自定义约束");
         auto* custom = qobject_cast<QPlainTextEdit*>(table->cellWidget(table->rowCount() - 1, 1));
         if (!custom) return 1;
-        custom->setPlainText("不使用超自然设定");
+        custom->setPlainText("不使用超自然设定\n" + QString(7000, QLatin1Char('x')));
         buttons->button(QDialogButtonBox::Ok)->click();
         const auto json = QJsonDocument::fromJson(draft.brief());
-        if (!json.isObject() || json.object().value("fields").toArray().size() != 2) return 1;
+        if (!json.isObject() || json.object().value("fields").toArray().size() != 2 ||
+            draft.brief().size() <= 4000) return 1;
         WorldBriefDialog restored(draft.brief(), nullptr);
         const auto* restored_table = restored.findChild<QTableWidget*>("worldBriefTable");
         return restored_table && restored_table->rowCount() == 2 ? 0 : 1;
     }
     MainWindow window;
+    if (const auto index = app.arguments().indexOf("--character-test"); index >= 0) {
+        if (index + 1 >= app.arguments().size()) return 1;
+        return window.test_character_creation(app.arguments().at(index + 1)) ? 0 : 1;
+    }
     if (app.arguments().contains("--smoke-test")) {
         auto* selector = window.findChild<QComboBox*>("providerTypeSelector");
         auto* base_url = window.findChild<QLineEdit*>("providerBaseUrl");

@@ -8,6 +8,10 @@ SemVer 字符串。`entry` 指向初始章节、场景和节点；`variables` �
 `agent_actions` 声明创作者预设的行动能力；可选的 `agent_routes` 声明场景间可走路线，
 `agent_npcs` 声明可交谈 NPC 的位置、可选的对话规则及 `initial_relationship`（-100 至 100，默认 0）；`agent_objects` 声明可观察对象及可拿取物品；`agent_item_rules` 声明物品与 NPC 或现场对象的互动；`agent_appointments` 声明可预约的 NPC 日程。
 
+`world_lore` 可按 `facts`、`rumors`、`secrets`、`rules`、`style` 保存长设定的分类结果。生成时会把非秘密部分压缩进 `world_context`，供开局和普通回合使用；`secrets` 留在世界包中，当前版本不会自动按 NPC 知情范围开放。创作者仍需通过受条件控制的对话或事件规则安排揭示。
+
+`player_roles` 可选。每个身份至少包含 `id`、`name`、`description`、`attributes` 和 `starting_items`；可增加 `item_names`、`fixed_name`、`starting_gold`、`editable_fields`、`traits`、`trait_count`。设置 `fixed_name` 后角色姓名不可改；`editable_fields` 是建角时必须填写的标签；玩家须恰好选择 `trait_count` 项特质。起始金币与背包在确认角色时写入权威状态。属性初始值写入对应的 `var.attribute.<属性ID>` 变量；之后角色卡、行动判定与读档都读取这一份实时变量。
+
 所有 ID 建议使用小写 ASCII，并以命名空间前缀区分，例如 `chapter.arrival`、
 `scene.hall`。Schema 对 ID 的约束是 `^[a-z][a-z0-9_.-]*$`。
 

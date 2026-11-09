@@ -24,7 +24,12 @@ Json state_json(const StoryPackage& package, const StoryState& state) {
                 {"npc_memory", Json::object()},
                 {"npc_relationships", Json::object()},
                 {"completed_events", Json::array()}, {"collected_objects", Json::array()},
-                {"dynamic_facts", Json::array()}, {"event_log", Json::array()}};
+                {"dynamic_facts", Json::array()}, {"event_log", Json::array()}, {"player", nullptr}};
+    if (state.player)
+        result["player"] = {{"name", state.player->name}, {"role", state.player->role},
+            {"background", state.player->background},
+            {"attributes", current_player_attributes(package, state)},
+            {"custom_fields", state.player->custom_fields}, {"traits", state.player->traits}};
     for (const auto& [id, fact] : state.dynamic_facts)
         result["dynamic_facts"].push_back({{"id", id}, {"kind", fact.kind},
             {"source", fact.source}, {"text", fact.text}, {"status", fact.status},
@@ -42,6 +47,15 @@ Json state_json(const StoryPackage& package, const StoryState& state) {
             [&](const AgentObject& object) { return object.item == id; });
         if (found != package.agent_objects.end())
             result["inventory_names"][id.value()] = found->name;
+        else if (state.player) {
+            const auto role = std::find_if(package.player_roles.begin(), package.player_roles.end(),
+                [&](const PlayerRole& value) { return value.id == state.player->role; });
+            if (role != package.player_roles.end()) {
+                const auto label = role->item_names.find(id);
+                if (label != role->item_names.end())
+                    result["inventory_names"][id.value()] = label->second;
+            }
+        }
     }
     for (const auto& [npc, memory] : state.npc_memory) {
         for (const auto& [key, value] : memory)

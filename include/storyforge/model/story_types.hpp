@@ -239,6 +239,30 @@ struct StoryEntry {
     bool operator==(const StoryEntry&) const = default;
 };
 
+struct PlayerRole {
+    std::string id;
+    std::string name;
+    std::string description;
+    std::map<std::string, std::int64_t> attributes;
+    std::map<ItemId, std::int64_t> starting_items;
+    std::map<ItemId, std::string> item_names;
+    std::optional<std::string> fixed_name;
+    std::int64_t starting_gold{0};
+    std::vector<std::string> editable_fields;
+    std::vector<std::string> traits;
+    std::size_t trait_count{0};
+};
+
+struct PlayerProfile {
+    std::string name;
+    std::string role;
+    std::string background;
+    std::map<std::string, std::int64_t> attributes;
+    std::map<std::string, std::string> custom_fields;
+    std::vector<std::string> traits;
+    bool operator==(const PlayerProfile&) const = default;
+};
+
 struct StoryPackage {
     std::string format;
     StoryId id;
@@ -248,15 +272,18 @@ struct StoryPackage {
     std::vector<StoryVariable> variables;
     std::vector<StoryChapter> chapters;
     std::string world_context;
+    std::map<std::string, std::vector<std::string>> world_lore;
     std::vector<AgentAction> agent_actions;
     std::vector<AgentRoute> agent_routes;
     std::vector<AgentNpc> agent_npcs;
     std::vector<AgentObject> agent_objects;
     std::vector<AgentItemRule> agent_item_rules;
     std::vector<AgentAppointment> agent_appointments;
+    std::vector<PlayerRole> player_roles;
 };
 
 struct StoryState {
+    std::optional<PlayerProfile> player;
     StoryEntry position;
     std::map<VariableId, StoryValue> variables;
     std::int64_t gold{0};

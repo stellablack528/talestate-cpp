@@ -235,6 +235,21 @@ StoryState make_initial_state(const StoryPackage& package) {
     return state;
 }
 
+std::map<std::string, std::int64_t> current_player_attributes(
+    const StoryPackage& package, const StoryState& state) {
+    std::map<std::string, std::int64_t> attributes;
+    if (!state.player) return attributes;
+    const auto role = std::find_if(package.player_roles.begin(), package.player_roles.end(),
+        [&](const PlayerRole& value) { return value.id == state.player->role; });
+    attributes = role == package.player_roles.end() ? state.player->attributes : role->attributes;
+    for (auto& [id, value] : attributes) {
+        const auto found = state.variables.find(VariableId{"var.attribute." + id});
+        if (found != state.variables.end())
+            if (const auto* number = std::get_if<std::int64_t>(&found->second)) value = *number;
+    }
+    return attributes;
+}
+
 const StoryScene* current_scene(const StoryPackage& package, const StoryState& state) {
     const auto* chapter = find_chapter(package, state.position.chapter);
     return chapter == nullptr ? nullptr : find_scene(*chapter, state.position.scene);

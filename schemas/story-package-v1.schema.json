@@ -14,6 +14,17 @@
     "variables": { "type": "array", "items": { "$ref": "#/$defs/variable" } },
     "chapters": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/chapter" } },
     "world_context": { "type": "string" },
+    "world_lore": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "facts": { "$ref": "#/$defs/loreEntries" },
+        "rumors": { "$ref": "#/$defs/loreEntries" },
+        "secrets": { "$ref": "#/$defs/loreEntries" },
+        "rules": { "$ref": "#/$defs/loreEntries" },
+        "style": { "$ref": "#/$defs/loreEntries" }
+      }
+    },
+    "player_roles": { "type": "array", "maxItems": 12, "items": { "$ref": "#/$defs/playerRole" } },
     "agent_actions": { "type": "array", "items": { "$ref": "#/$defs/choice" } },
     "agent_routes": { "type": "array", "items": { "$ref": "#/$defs/agentRoute" } },
     "agent_npcs": { "type": "array", "items": { "$ref": "#/$defs/agentNpc" } },
@@ -26,6 +37,32 @@
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]*$" },
     "value": { "type": ["string", "integer", "number", "boolean"] },
     "compareOperator": { "enum": ["eq", "ne", "lt", "lte", "gt", "gte"] },
+    "loreEntries": { "type": "array", "maxItems": 6144,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 } },
+    "playerRole": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "description", "attributes", "starting_items"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "description": { "type": "string" },
+        "attributes": { "type": "object", "minProperties": 1, "maxProperties": 8,
+          "additionalProperties": { "type": "integer", "minimum": -1000000, "maximum": 1000000 } },
+        "starting_items": { "type": "object", "maxProperties": 8,
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 10 } },
+        "item_names": { "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "$ref": "#/$defs/nonEmptyString" } },
+        "fixed_name": { "$ref": "#/$defs/nonEmptyString" },
+        "starting_gold": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "editable_fields": { "type": "array", "maxItems": 8, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "traits": { "type": "array", "maxItems": 12, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" } },
+        "trait_count": { "type": "integer", "minimum": 0, "maximum": 12 }
+      }
+    },
     "entry": {
       "type": "object", "additionalProperties": false,
       "required": ["chapter", "scene", "node"],

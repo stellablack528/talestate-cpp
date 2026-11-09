@@ -317,7 +317,7 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
         return {};
     }
     StoryPackage package;
-    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "agent_actions", "agent_routes", "agent_npcs", "agent_objects", "agent_item_rules", "agent_appointments"}, report);
+    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "world_lore", "agent_actions", "agent_routes", "agent_npcs", "agent_objects", "agent_item_rules", "agent_appointments", "player_roles"}, report);
     package.format = read_string(json, "format", "", report);
     package.id = StoryId{read_id(json, "id", "", report)};
     package.title = read_string(json, "title", "", report);
@@ -350,6 +350,71 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
     if (const auto it = json.find("world_context"); it != json.end()) {
         if (it->is_string()) package.world_context = it->get<std::string>();
         else type_error(report, "/world_context", "string");
+    }
+    if (const auto it = json.find("world_lore"); it != json.end()) {
+        if (!it->is_object()) type_error(report, "/world_lore", "object");
+        else for (const auto& [key, value] : it->items()) {
+            if (!value.is_array()) { type_error(report, "/world_lore/" + key, "array"); continue; }
+            for (std::size_t i = 0; i < value.size(); ++i) {
+                if (!value[i].is_string()) type_error(report, "/world_lore/" + key + "/" + std::to_string(i), "string");
+                else package.world_lore[key].push_back(value[i].get<std::string>());
+            }
+        }
+    }
+    if (const auto it = json.find("player_roles"); it != json.end()) {
+        if (!it->is_array()) type_error(report, "/player_roles", "array");
+        else for (std::size_t i = 0; i < it->size(); ++i) {
+            const auto path = "/player_roles/" + std::to_string(i);
+            const auto& raw = (*it)[i];
+            reject_unknown_properties(raw, path, {"id", "name", "description", "attributes", "starting_items", "item_names", "fixed_name", "starting_gold", "editable_fields", "traits", "trait_count"}, report);
+            PlayerRole role;
+            role.id = read_id(raw, "id", path, report);
+            role.name = read_string(raw, "name", path, report);
+            role.description = read_string(raw, "description", path, report);
+            if (const auto value = raw.find("fixed_name"); value != raw.end()) {
+                if (!value->is_string()) type_error(report, path + "/fixed_name", "string");
+                else role.fixed_name = value->get<std::string>();
+            }
+            if (const auto value = raw.find("starting_gold"); value != raw.end()) {
+                if (!value->is_number_integer()) type_error(report, path + "/starting_gold", "integer");
+                else role.starting_gold = value->get<std::int64_t>();
+            }
+            if (const auto value = raw.find("trait_count"); value != raw.end()) {
+                if (!value->is_number_unsigned()) type_error(report, path + "/trait_count", "unsigned integer");
+                else role.trait_count = value->get<std::size_t>();
+            }
+            for (const auto* field : {"editable_fields", "traits"}) {
+                const auto value = raw.find(field);
+                if (value == raw.end()) continue;
+                if (!value->is_array()) { type_error(report, path + "/" + field, "array"); continue; }
+                for (std::size_t j = 0; j < value->size(); ++j) {
+                    if (!(*value)[j].is_string()) type_error(report, path + "/" + field + "/" + std::to_string(j), "string");
+                    else if (std::string_view(field) == "traits") role.traits.push_back((*value)[j].get<std::string>());
+                    else role.editable_fields.push_back((*value)[j].get<std::string>());
+                }
+            }
+            for (const auto* field : {"attributes", "starting_items"}) {
+                const auto values = raw.is_object() ? raw.find(field) : raw.end();
+                if (values == raw.end() || !values->is_object()) {
+                    type_error(report, path + "/" + field, "object");
+                    continue;
+                }
+                for (const auto& [key, value] : values->items()) {
+                    if (!value.is_number_integer()) { type_error(report, path + "/" + field + "/" + key, "integer"); continue; }
+                    const auto number = value.get<std::int64_t>();
+                    if (std::string_view(field) == "attributes") role.attributes[key] = number;
+                    else role.starting_items[ItemId{key}] = number;
+                }
+            }
+            if (const auto names = raw.find("item_names"); names != raw.end()) {
+                if (!names->is_object()) type_error(report, path + "/item_names", "object");
+                else for (const auto& [key, value] : names->items()) {
+                    if (!value.is_string()) type_error(report, path + "/item_names/" + key, "string");
+                    else role.item_names[ItemId{key}] = value.get<std::string>();
+                }
+            }
+            package.player_roles.push_back(std::move(role));
+        }
     }
     if (const auto it = json.find("agent_actions"); it != json.end()) {
         if (!it->is_array()) type_error(report, "/agent_actions", "array");

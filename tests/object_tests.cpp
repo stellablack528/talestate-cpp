@@ -148,6 +148,7 @@ TEST_CASE("invalid object declarations and forged collected objects are rejected
     older["state"].erase("appointments");
     older["state"].erase("dynamic_facts");
     older["state"].erase("event_log");
+    older["state"].erase("player");
     auto older_result = storyforge::deserialize_story_save(package, older.dump());
     REQUIRE(std::holds_alternative<storyforge::StoryState>(older_result));
     CHECK(std::get<storyforge::StoryState>(older_result).collected_objects.empty());

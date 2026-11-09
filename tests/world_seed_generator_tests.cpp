@@ -1,5 +1,6 @@
 #include "storyforge/agent/world_seed_generator.hpp"
 #include "storyforge/agent/world_spec.hpp"
+#include "storyforge/agent/world_setting.hpp"
 #include "storyforge/io/story_loader.hpp"
 #include "storyforge/io/story_save.hpp"
 #include "storyforge/runtime/story_runtime.hpp"
@@ -15,6 +16,8 @@ class FixedProvider final : public storyforge::agent::ILlmProvider {
 public:
     std::string response;
     std::vector<std::string> queued;
+    std::vector<std::string> content_queued;
+    bool saw_content_repair{false};
     int calls{0};
     storyforge::agent::ChatResult chat(const storyforge::agent::ChatRequest& request) override {
         ++calls;
@@ -28,6 +31,14 @@ public:
         const auto details = nlohmann::json::parse(response, nullptr, false);
         if (!request.messages.empty() &&
             request.messages.front().content.find("WORLD_CONTENT_V0") != std::string::npos) {
+            if (request.messages.size() > 2 &&
+                request.messages.back().content.find("/clues/") != std::string::npos)
+                saw_content_repair = true;
+            if (!content_queued.empty()) {
+                auto next = std::move(content_queued.front());
+                content_queued.erase(content_queued.begin());
+                return storyforge::agent::ChatResponse{std::move(next), {}, {}};
+            }
             if (!details.is_object()) return storyforge::agent::ChatResponse{"{}", {}, {}};
             auto content = details;
             content.erase("world_spec");
@@ -92,6 +103,13 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
         details["appointments"] = nlohmann::json::array({{{"id", "meeting"},
             {"title", "约定会面"}, {"npc", "gate_keeper"}, {"scene", "hall"},
             {"start_minute", 60}, {"duration_minutes", 30}}});
+        if (title == "魔法学园")
+            details["character"] = {{"mode", "fixed"}, {"fixed_name", "莉亚"},
+                {"editable_fields", nlohmann::json::array({"家族", "入学动机"})},
+                {"traits", nlohmann::json::array({"谨慎", "大胆"})},
+                {"trait_count", 1}, {"starting_gold", 12},
+                {"starting_items", nlohmann::json::array({{{"id", "letter"},
+                    {"name", "入学信"}, {"quantity", 1}}})}};
         if (title == "魔法学园") {
             details["world_spec"] = {
                 {"attributes", {{{"id", "focus"}, {"name", "专注"}, {"initial", 3}, {"min", 0}, {"max", 6}},
@@ -123,7 +141,17 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
             }
         }
         provider.response = details.dump();
-        auto generated = storyforge::agent::generate_world_seed_from_map(map_for(title), title + "发生了谜案", provider);
+        if (title == "魔法学园") {
+            auto invalid_content = details;
+            invalid_content["clues"][1]["scene"] = "gate";
+            provider.content_queued.push_back(invalid_content.dump());
+        }
+        storyforge::agent::WorldSetting setting;
+        setting.compact_brief = title + "发生了谜案";
+        setting.sections[0] = {"塔楼可进入"};
+        setting.sections[2] = {"守门人藏着另一把钥匙"};
+        auto generated = storyforge::agent::generate_world_seed_from_map(
+            map_for(title), setting.compact_brief, provider, &setting);
         REQUIRE(std::holds_alternative<storyforge::agent::WorldSeedDraft>(generated));
         const auto& json_text = std::get<storyforge::agent::WorldSeedDraft>(generated).story_json;
         auto loaded = storyforge::load_story_package_text(json_text);
@@ -131,6 +159,17 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
         REQUIRE(loaded.report.valid());
         REQUIRE(loaded.package.has_value());
         const auto& package = *loaded.package;
+        CHECK(package.world_lore.at("facts").front() == "塔楼可进入");
+        CHECK(package.world_lore.at("secrets").front() == "守门人藏着另一把钥匙");
+        CHECK(package.world_context.find("守门人藏着另一把钥匙") == std::string::npos);
+        if (title == "魔法学园") {
+            CHECK(provider.saw_content_repair);
+            REQUIRE(package.player_roles.size() == 1);
+            CHECK(package.player_roles.front().fixed_name == "莉亚");
+            CHECK(package.player_roles.front().trait_count == 1);
+            CHECK(package.player_roles.front().starting_gold == 12);
+            CHECK(package.player_roles.front().starting_items.contains(storyforge::ItemId{"item.start.letter"}));
+        }
         const auto sidecar = nlohmann::json::parse(
             std::get<storyforge::agent::WorldSeedDraft>(generated).world_spec_json);
         CHECK(sidecar["world_spec"] == details["world_spec"]);

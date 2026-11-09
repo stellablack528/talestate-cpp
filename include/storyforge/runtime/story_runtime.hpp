@@ -26,6 +26,9 @@ struct RuntimeError {
 using CommandResult = std::variant<StoryDelta, RuntimeError>;
 
 [[nodiscard]] StoryState make_initial_state(const StoryPackage& package);
+// Role attributes are starting values; declared world variables are the live authority.
+[[nodiscard]] std::map<std::string, std::int64_t> current_player_attributes(
+    const StoryPackage& package, const StoryState& state);
 [[nodiscard]] const StoryScene* current_scene(const StoryPackage& package, const StoryState& state);
 [[nodiscard]] const StoryNode* current_node(const StoryPackage& package, const StoryState& state);
 [[nodiscard]] bool evaluate_condition(const StoryCondition& condition, const StoryState& state);

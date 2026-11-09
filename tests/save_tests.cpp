@@ -28,6 +28,68 @@ std::string save_text(const storyforge::StoryPackage& package, const storyforge:
 
 } // namespace
 
+TEST_CASE("player identity, attributes and starter inventory survive saving") {
+    auto package = harbor_world();
+    storyforge::PlayerRole role;
+    role.id = "role.reporter";
+    role.name = "Reporter";
+    role.attributes = {{"Insight", 7}, {"Will", 5}};
+    role.starting_items = {{storyforge::ItemId{"item.notebook"}, 1}};
+    package.player_roles.push_back(role);
+    auto state = storyforge::make_initial_state(package);
+    state.player = storyforge::PlayerProfile{"Avery", role.id, "New student", role.attributes};
+    state.inventory = role.starting_items;
+    const auto encoded = save_text(package, state);
+    auto decoded = storyforge::deserialize_story_save(package, encoded);
+    REQUIRE(std::holds_alternative<storyforge::StoryState>(decoded));
+    CHECK(std::get<storyforge::StoryState>(decoded) == state);
+    auto tampered = nlohmann::json::parse(encoded);
+    tampered["state"]["player"]["attributes"]["Insight"] = 10;
+    CHECK(std::holds_alternative<storyforge::SaveError>(
+        storyforge::deserialize_story_save(package, tampered.dump())));
+}
+
+TEST_CASE("character creation choices and live growth injury recovery share save state") {
+    auto package = harbor_world();
+    storyforge::PlayerRole role;
+    role.id = "role.protagonist";
+    role.name = "Student";
+    role.fixed_name = "Avery";
+    role.attributes = {{"energy", 5}};
+    role.starting_gold = 12;
+    role.editable_fields = {"club"};
+    role.traits = {"brave", "careful"};
+    role.trait_count = 1;
+    package.player_roles.push_back(role);
+    package.variables.push_back({storyforge::VariableId{"var.attribute.energy"}, std::int64_t{5}});
+    for (const auto& [id, amount] : {std::pair{"growth", 2}, {"injury", -3}, {"recovery", 1}})
+        package.agent_actions.push_back({storyforge::ChoiceId{"action." + std::string{id}}, id, {},
+            {storyforge::StoryEffect{storyforge::ModifyVariableEffect{
+                storyforge::VariableId{"var.attribute.energy"}, storyforge::VariableOperation::add,
+                std::int64_t{amount}}}}, std::nullopt});
+    auto state = storyforge::make_initial_state(package);
+    state.player = storyforge::PlayerProfile{"Avery", role.id, "New student", role.attributes,
+        {{"club", "newspaper"}}, {"careful"}};
+    state.gold = role.starting_gold;
+    for (const auto& [action, expected] : {std::pair{"growth", 7}, {"injury", 4}, {"recovery", 5}}) {
+        auto result = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::authored, "action." + std::string{action}}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(result));
+        CHECK(storyforge::current_player_attributes(package, state).at("energy") == expected);
+    }
+    CHECK(state.player->attributes.at("energy") == 5); // only the initialization snapshot
+    const auto encoded = save_text(package, state);
+    auto decoded = storyforge::deserialize_story_save(package, encoded);
+    REQUIRE(std::holds_alternative<storyforge::StoryState>(decoded));
+    const auto restored = std::get<storyforge::StoryState>(decoded);
+    CHECK(restored == state);
+    CHECK(storyforge::current_player_attributes(package, restored).at("energy") == 5);
+    auto tampered = nlohmann::json::parse(encoded);
+    tampered["state"]["player"]["traits"] = nlohmann::json::array({"unknown"});
+    CHECK(std::holds_alternative<storyforge::SaveError>(
+        storyforge::deserialize_story_save(package, tampered.dump())));
+}
+
 TEST_CASE("harbor dialogue progress survives a save and can unlock the next move") {
     const auto package = harbor_world();
     auto state = storyforge::make_initial_state(package);
