@@ -24,6 +24,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFrame>
 #include <QFormLayout>
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
@@ -41,6 +42,7 @@
 #include <QPushButton>
 #include <QPlainTextEdit>
 #include <QPen>
+#include <QPixmap>
 #include <QBrush>
 #include <QPainter>
 #include <QComboBox>
@@ -58,6 +60,60 @@
 #include <QWidget>
 
 namespace {
+
+QString watercolor_theme() {
+    return R"(
+        QWidget { color: #30483d; font-family: "Microsoft YaHei UI", "Noto Sans CJK SC"; font-size: 14px; }
+        QWidget#mainShell, QDialog { background: #f5f3e9; }
+        QFrame#masthead {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 #edf3e9, stop:0.58 #f5f6ec, stop:1 #e4eee3);
+            border: 1px solid #ccd9c9; border-radius: 16px;
+        }
+        QLabel#mastheadTitle { color: #294e3b; font-family: "Noto Serif CJK SC", "SimSun";
+                              font-size: 23px; font-weight: 700; background: transparent; }
+        QLabel#mastheadSubtitle { color: #667f6d; font-size: 12px; background: transparent; }
+        QLabel#mastheadEmblem { background: transparent; }
+        QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }
+        QGroupBox { background: #fbfaf3; border: 1px solid #cbd6c7; border-radius: 12px;
+                    margin-top: 15px; padding: 16px 14px 13px; font-weight: 600; }
+        QGroupBox::title { subcontrol-origin: margin; left: 16px; top: 1px;
+                           padding: 0 7px; color: #35594b; background: #f5f3e9;
+                           font-family: "Noto Serif CJK SC", "SimSun"; }
+        QLineEdit, QTextEdit, QTextBrowser, QPlainTextEdit, QComboBox, QTableWidget, QGraphicsView {
+            background: #fffef9; color: #263d35; border: 1px solid #c8d4c5;
+            border-radius: 7px; padding: 7px; selection-background-color: #9ebaa9;
+            selection-color: #18372b;
+        }
+        QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QTableWidget:focus {
+            border: 2px solid #759a83;
+        }
+        QLineEdit:read-only, QTextEdit:read-only, QTextBrowser { background: #fbfaf4; }
+        QTextBrowser { border-left: 3px solid #9ebaa3; }
+        QComboBox { min-height: 27px; padding-right: 25px; }
+        QComboBox::drop-down { border: none; width: 24px; }
+        QComboBox QAbstractItemView { background: #fffef9; selection-background-color: #dce9dd; }
+        QPushButton { background: #456d59; color: #fffef7; border: 1px solid #456d59;
+                      border-radius: 7px; padding: 9px 14px; font-weight: 600; min-height: 20px; }
+        QPushButton:hover { background: #567f69; border-color: #567f69; }
+        QPushButton:pressed { background: #315745; }
+        QPushButton:disabled { background: #d1d9cf; border-color: #d1d9cf; color: #65776d; }
+        QPushButton#sendStoryButton { background: #315b49; border-color: #315b49; padding: 10px 20px; }
+        QPushButton#sendStoryButton:hover { background: #47725c; }
+        QCheckBox { spacing: 9px; }
+        QCheckBox::indicator { width: 16px; height: 16px; }
+        QCheckBox::indicator:unchecked { border: 1px solid #8ba994; background: #fffef9; border-radius: 3px; }
+        QCheckBox::indicator:checked { border: 1px solid #456d59; background: #456d59; border-radius: 3px; }
+        QTableWidget { gridline-color: #dce6d9; }
+        QHeaderView::section { background: #e7eee3; color: #35594b; border: 0;
+                               border-bottom: 1px solid #c8d4c5; padding: 8px; font-weight: 600; }
+        QScrollBar:vertical { background: #f2f2e9; width: 10px; margin: 2px; border: none; }
+        QScrollBar::handle:vertical { background: #a8bdaa; border-radius: 5px; min-height: 26px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+        QSplitter::handle { background: #d7e0d4; width: 2px; }
+        QMessageBox { background: #f5f3e9; }
+    )";
+}
 
 QString safe(const std::string& value) {
     return QString::fromStdString(value).toHtmlEscaped();
@@ -188,27 +244,38 @@ class MainWindow final : public QWidget {
 public:
     MainWindow() {
         setWindowTitle("TaleState C++ · 文字 RPG Agent");
+        setObjectName("mainShell");
         resize(1180, 760);
-        setStyleSheet(R"(
-            QWidget { background: #f5f1e9; color: #2f2d2a; font-size: 14px; }
-            QGroupBox { background: #fffdf8; border: 1px solid #d8d0c2; border-radius: 12px;
-                        margin-top: 12px; padding: 14px; font-weight: 600; }
-            QGroupBox::title { subcontrol-origin: margin; left: 14px; padding: 0 5px; }
-            QLineEdit, QTextEdit, QTextBrowser { background: white; border: 1px solid #d8d0c2;
-                        border-radius: 8px; padding: 8px; selection-background-color: #996e48; }
-            QPushButton { background: #554436; color: white; border: 0; border-radius: 8px;
-                          padding: 10px 15px; font-weight: 600; }
-            QPushButton:hover { background: #75563d; }
-            QPushButton:disabled { background: #bcb5ac; }
-        )");
 
         auto* root = new QVBoxLayout(this);
-        root->setContentsMargins(22, 20, 22, 20);
-        root->setSpacing(14);
-        auto* heading = new QLabel("TaleState C++  ·  把你的世界交给玩家");
+        root->setContentsMargins(22, 17, 22, 19);
+        root->setSpacing(10);
+        auto* masthead = new QFrame;
+        masthead->setObjectName("masthead");
+        auto* masthead_layout = new QHBoxLayout(masthead);
+        masthead_layout->setContentsMargins(16, 9, 20, 9);
+        masthead_layout->setSpacing(12);
+        auto* emblem = new QLabel;
+        emblem->setObjectName("mastheadEmblem");
+        emblem->setFixedSize(64, 64);
+        emblem->setPixmap(QPixmap(":/brand/icon.png").scaled(60, 60,
+            Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        masthead_layout->addWidget(emblem);
+        auto* title_column = new QVBoxLayout;
+        title_column->setSpacing(1);
+        auto* heading = new QLabel("TaleState C++ · 把你的世界交给玩家");
+        heading->setObjectName("mastheadTitle");
         heading->setWordWrap(true);
-        heading->setStyleSheet("font-size: 23px; font-weight: 700; color: #493723;");
-        root->addWidget(heading);
+        auto* subtitle = new QLabel("一卷世界设定，一段由选择写成的旅途");
+        subtitle->setObjectName("mastheadSubtitle");
+        title_column->addWidget(heading);
+        title_column->addWidget(subtitle);
+        masthead_layout->addLayout(title_column, 1);
+        root->addWidget(masthead);
+        auto* rule = new QFrame;
+        rule->setFrameShape(QFrame::HLine);
+        rule->setStyleSheet("color: #c8d5c7; background: #c8d5c7; max-height: 1px;");
+        root->addWidget(rule);
 
         auto* splitter = new QSplitter(Qt::Horizontal);
         root->addWidget(splitter, 1);
@@ -309,7 +376,7 @@ public:
         auto* provider_hint = new QLabel("预设会填写官方默认地址；模型 ID 请从服务商控制台复制。也可修改地址，使用其他兼容服务。");
         provider_hint->setObjectName("providerHint");
         provider_hint->setWordWrap(true);
-        provider_hint->setStyleSheet("font-size: 12px; color: #756a5d;");
+        provider_hint->setStyleSheet("font-size: 12px; color: #6b806f;");
         provider_layout->addWidget(provider_hint);
         connect(provider_type_, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
                 [this](int index) {
@@ -324,7 +391,7 @@ public:
         test_connection_status_ = new QLabel("尚未测试连接。测试会发送一次简短请求，可能消耗少量 API 额度。");
         test_connection_status_->setObjectName("testConnectionStatus");
         test_connection_status_->setWordWrap(true);
-        test_connection_status_->setStyleSheet("font-size: 12px; color: #756a5d;");
+        test_connection_status_->setStyleSheet("font-size: 12px; color: #6b806f;");
         provider_layout->addWidget(test_connection_button_);
         provider_layout->addWidget(test_connection_status_);
         connect(test_connection_button_, &QPushButton::clicked, this,
@@ -332,7 +399,7 @@ public:
         const auto mark_untested = [this] {
             if (!busy_) {
                 test_connection_status_->setText("配置已更改，请重新测试连接。");
-                test_connection_status_->setStyleSheet("font-size: 12px; color: #756a5d;");
+                test_connection_status_->setStyleSheet("font-size: 12px; color: #6b806f;");
             }
         };
         connect(base_url_, &QLineEdit::textChanged, this, mark_untested);
@@ -341,7 +408,7 @@ public:
         auto* privacy = new QLabel("模型配置中的 Key 不写入世界包、存档或日志；请求直达你填写的模型服务。");
         privacy->setObjectName("providerPrivacy");
         privacy->setWordWrap(true);
-        privacy->setStyleSheet("font-size: 12px; color: #756a5d;");
+        privacy->setStyleSheet("font-size: 12px; color: #6b806f;");
         provider_layout->addWidget(privacy);
         left_layout->addWidget(provider_group);
 
@@ -361,7 +428,7 @@ public:
         auto* story_layout = new QVBoxLayout(story_group);
         story_view_ = new QTextBrowser;
         story_view_->setOpenExternalLinks(false);
-        story_view_->setHtml("<p style='color:#756a5d'>导入世界包，填写模型信息，然后开始自由行动。</p>");
+        story_view_->setHtml("<p style='color:#6b806f'>导入世界包，填写模型信息，然后开始自由行动。</p>");
         story_layout->addWidget(story_view_);
         right_layout->addWidget(story_group, 1);
         auto* input_group = new QGroupBox("你想做什么？");
@@ -370,6 +437,7 @@ public:
         action_input_->setPlaceholderText("例如：我悄悄靠近钟楼，观察齿轮的刻痕……");
         action_input_->setFixedHeight(90);
         send_button_ = new QPushButton("推进故事 →");
+        send_button_->setObjectName("sendStoryButton");
         input_layout->addWidget(action_input_);
         input_layout->addWidget(send_button_, 0, Qt::AlignRight);
         right_layout->addWidget(input_group);
@@ -506,17 +574,17 @@ private:
             const auto b = find(route.to);
             scene->addLine(95 + a->x * 150, 65 + a->y * 110,
                            95 + b->x * 150, 65 + b->y * 110,
-                           QPen(QColor("#92795e"), 3));
+                           QPen(QColor("#93ae98"), 3));
         }
         for (const auto& location : draft.locations) {
             const int x = 95 + location.x * 150;
             const int y = 65 + location.y * 110;
             const bool start = location.id == draft.start;
             scene->addEllipse(x - 13, y - 13, 26, 26,
-                              QPen(QColor("#554436"), 2),
-                              QBrush(QColor(start ? "#d5a35a" : "#fffdf8")));
+                              QPen(QColor("#456d59"), 2),
+                              QBrush(QColor(start ? "#d9c28b" : "#fbfaf3")));
             auto* label = scene->addText(QString::fromStdString(location.title));
-            label->setDefaultTextColor(QColor("#2f2d2a"));
+            label->setDefaultTextColor(QColor("#30483d"));
             label->setPos(x - label->boundingRect().width() / 2, y + 13);
         }
         scene->setSceneRect(0, 0, 790, 570);
@@ -867,7 +935,7 @@ private:
                 [&](const storyforge::StoryCondition& condition) {
                     return storyforge::evaluate_condition(condition, state_);
                 });
-            QPen pen(QColor(available ? "#7b9b81" : "#b9b1a4"), 3);
+            QPen pen(QColor(available ? "#729982" : "#c4cec0"), 3);
             if (!available) pen.setStyle(Qt::DashLine);
             picture->addLine(QLineF(positions.at(route.from), positions.at(route.to)), pen);
         }
@@ -875,10 +943,10 @@ private:
             const auto at = positions.at(scene->id);
             const bool here = scene->id == state_.position.scene;
             picture->addEllipse(at.x() - 15, at.y() - 15, 30, 30,
-                QPen(QColor("#554436"), 2),
-                QBrush(QColor(here ? "#e4b45e" : "#fffdf8")));
+                QPen(QColor("#456d59"), 2),
+                QBrush(QColor(here ? "#d9c28b" : "#fbfaf3")));
             auto* label = picture->addText(QString::fromStdString(scene->title));
-            label->setDefaultTextColor(QColor("#2f2d2a"));
+            label->setDefaultTextColor(QColor("#30483d"));
             label->setPos(at.x() - label->boundingRect().width() / 2, at.y() + 20);
         }
         picture->setSceneRect(0, 0, 620, 440);
@@ -1046,6 +1114,7 @@ private:
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
+    app.setStyleSheet(watercolor_theme());
     app.setWindowIcon(QIcon(":/brand/icon.png"));
     if (app.arguments().contains("--brief-test")) {
         WorldBriefDialog draft({}, nullptr);
