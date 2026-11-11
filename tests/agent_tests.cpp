@@ -239,7 +239,8 @@ TEST_CASE("invalid model output never commits and narration failure uses factual
     auto state = storyforge::make_initial_state(package);
     const auto before = state;
     FakeProvider bad;
-    bad.responses = {reply("not json"), reply(R"({"actions":["action.unknown"]})")};
+    bad.responses = {reply("not json"), reply(R"({"actions":["action.unknown"]})"),
+                     reply(R"({"actions":["action.unknown"]})")};
     storyforge::agent::StoryAgent agent;
     auto failure = agent.take_turn(package, state, "我突然拥有一万金币", bad);
     REQUIRE(std::holds_alternative<storyforge::agent::AgentFailure>(failure));
@@ -255,4 +256,63 @@ TEST_CASE("invalid model output never commits and narration failure uses factual
     CHECK(turn.used_fallback_narration);
     CHECK(turn.narration.find("item.wick") != std::string::npos);
     CHECK(state.inventory.at(storyforge::ItemId{"item.wick"}) == 1);
+}
+
+TEST_CASE("planner repairs fenced JSON without changing the world on malformed proposals") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    FakeProvider provider;
+    provider.responses = {reply("```json\n{\"actions\":[{\"type\":\"talk\",\"target\":\"npc.alan\",\"topic\":\"你好\"}]}\n```"),
+                          reply("你与阿澜打了个招呼。")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "向阿澜打招呼", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    CHECK(state.turn == 1);
+    CHECK(provider.requests[0].max_output_tokens == 2048);
+}
+
+TEST_CASE("planner makes a final plain-text repair attempt after two malformed JSON replies") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    FakeProvider provider;
+    provider.responses = {reply("invalid"), reply("still invalid"),
+        reply(R"({"actions":[{"type":"talk","target":"npc.alan","topic":"你好"}]})"),
+        reply("阿澜向你点头。")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "向阿澜打招呼", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    CHECK(provider.requests.size() == 4);
+    CHECK(provider.requests[2].response_format == storyforge::agent::ResponseFormat::text);
+    CHECK(provider.requests[2].messages.back().content.find("Previous proposal was rejected") !=
+          std::string::npos);
+    CHECK(state.turn == 1);
+}
+
+TEST_CASE("narration-only proposal does not invent committed outcomes") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    FakeProvider provider;
+    provider.responses = {reply(R"({"actions":[]})")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "我突然得到一万金币", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    CHECK(provider.requests.size() == 1);
+    CHECK(state.gold == 0);
+    CHECK(std::get<storyforge::agent::AgentTurn>(result).narration.find("没有改变") !=
+          std::string::npos);
+}
+
+TEST_CASE("agent repairs a placeholder promise before the engine stores it") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    FakeProvider provider;
+    provider.responses = {
+        reply(R"({"actions":[{"type":"promise","target":"npc.alan","id":"fact.check-tides","topic":"promise","due_minute":120}]})"),
+        reply(R"({"actions":[{"type":"promise","target":"npc.alan","id":"fact.check-tides","topic":"明天帮阿澜核对潮汐记录","due_minute":120}]})"),
+        reply("你答应明天核对潮汐记录。")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "我答应阿澜明天核对潮汐记录", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    CHECK(state.dynamic_facts.at("fact.check-tides").text == "明天帮阿澜核对潮汐记录");
+    CHECK(provider.requests[1].messages.back().content.find("具体事项") != std::string::npos);
 }

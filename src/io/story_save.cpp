@@ -106,7 +106,7 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
             {"text", fact.text}, {"status", fact.status}, {"due_minute", fact.due_minute}};
     for (const auto& event : state.event_log)
         saved_state["event_log"].push_back({{"type", event.type}, {"fact_id", event.fact_id},
-            {"turn", event.turn}, {"minute", event.minute}});
+            {"turn", event.turn}, {"minute", event.minute}, {"source", event.source}});
 
     const Json save{{"format", "talestate.save/v1"},
                     {"world", {{"id", package.id.value()}, {"version", package.version}}},
@@ -264,7 +264,9 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                 const auto due = value["due_minute"].get<std::uint64_t>();
                 if ((kind != "lead" && kind != "promise" && kind != "help_request" && kind != "planned_event") ||
                     (status != "open" && status != "broken" && status != "fulfilled" &&
-                     status != "occurred" && status != "expired") ||
+                     status != "occurred" && status != "expired" &&
+                     status != "corroborated" && status != "disputed" &&
+                     status != "accepted" && status != "declined" && status != "withdrawn") ||
                     content.empty() || content.size() > 280 || !valid_id(source) ||
                     (due > state.world_minute && due - state.world_minute > 10080)) return malformed();
                 const bool object_source = std::any_of(package.agent_objects.begin(), package.agent_objects.end(),
@@ -272,14 +274,19 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                 const bool npc_source = std::any_of(package.agent_npcs.begin(), package.agent_npcs.end(),
                     [&](const AgentNpc& npc) { return npc.id.value() == source; });
                 if ((kind == "lead" ? !object_source : !npc_source) ||
-                    ((kind == "lead" || kind == "help_request") && (status != "open" || due != 0)) ||
+                    ((kind == "lead" && status != "open" && status != "corroborated" &&
+                      status != "disputed") ||
+                     (kind == "help_request" && status != "open" && status != "accepted" &&
+                      status != "declined" && status != "withdrawn") ||
+                     ((kind == "lead" || kind == "help_request") && due != 0)) ||
                     (kind == "planned_event" && (due == 0 ||
                         (status != "open" && status != "occurred" && status != "expired"))) ||
                     (kind == "promise" && (due == 0 || status == "occurred"))) return malformed();
                 state.dynamic_facts.emplace(id, DynamicFact{id, kind, source, content, status, due});
             }
             for (const auto& value : raw["event_log"]) {
-                if (!has_fields(value, {"type", "fact_id", "turn", "minute"}) ||
+                if ((!has_fields(value, {"type", "fact_id", "turn", "minute"}) &&
+                     !has_fields(value, {"type", "fact_id", "turn", "minute", "source"})) ||
                     !value["type"].is_string() || !value["fact_id"].is_string() ||
                     !value["turn"].is_number_unsigned() || !value["minute"].is_number_unsigned())
                     return malformed();
@@ -288,7 +295,11 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                 const auto minute = value["minute"].get<std::uint64_t>();
                 if (!state.dynamic_facts.contains(id) || turn > state.turn || minute > state.world_minute)
                     return malformed();
-                state.event_log.push_back({value["type"].get<std::string>(), id, turn, minute});
+                const auto source = value.contains("source") && value["source"].is_string() ?
+                    value["source"].get<std::string>() : std::string{};
+                if ((value.contains("source") && !value["source"].is_string()) ||
+                    (!source.empty() && !valid_id(source))) return malformed();
+                state.event_log.push_back({value["type"].get<std::string>(), id, turn, minute, source});
             }
             std::map<std::string, std::string> replayed;
             std::uint64_t last_turn = 0;
@@ -299,7 +310,7 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                 last_minute = event.minute;
                 const auto& fact = state.dynamic_facts.at(event.fact_id);
                 if (event.type == "created") {
-                    if (replayed.contains(event.fact_id) ||
+                    if (!event.source.empty() || replayed.contains(event.fact_id) ||
                         (fact.due_minute && (fact.due_minute <= event.minute ||
                          fact.due_minute - event.minute > 10080))) return malformed();
                     replayed[event.fact_id] = "open";
@@ -308,7 +319,17 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                     if (found == replayed.end() || found->second != "open" ||
                         (fact.kind == "promise" && event.type != "fulfilled" && event.type != "broken") ||
                         (fact.kind == "planned_event" && event.type != "occurred" && event.type != "expired") ||
-                        (fact.kind != "promise" && fact.kind != "planned_event")) return malformed();
+                        (fact.kind == "lead" && event.type != "corroborated" && event.type != "disputed") ||
+                        (fact.kind == "help_request" && event.type != "accepted" &&
+                         event.type != "declined" && event.type != "withdrawn")) return malformed();
+                    if (fact.kind == "lead") {
+                        if (event.source.empty() || event.source == fact.source) return malformed();
+                        const bool known_object = std::any_of(package.agent_objects.begin(), package.agent_objects.end(),
+                            [&](const AgentObject& object) { return object.id == event.source; });
+                        const bool known_npc = std::any_of(package.agent_npcs.begin(), package.agent_npcs.end(),
+                            [&](const AgentNpc& npc) { return npc.id.value() == event.source; });
+                        if (!known_object && !known_npc) return malformed();
+                    } else if (!event.source.empty()) return malformed();
                     found->second = event.type;
                 }
             }

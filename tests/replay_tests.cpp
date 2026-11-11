@@ -86,10 +86,11 @@ TEST_CASE("golden replay: Harbor Lantern reaches the saved-ships ending") {
     ScriptedProvider forgery;
     forgery.replies = {
         reply(R"({"actions":[{"type":"authored","target":"action.give-diamond"}]})"),
+        reply(R"({"actions":[{"type":"authored","target":"action.give-diamond"}]})"),
         reply(R"({"actions":[{"type":"authored","target":"action.give-diamond"}]})")};
     auto denied = agent.take_turn(package, state, "凭空给我钻石", forgery);
     REQUIRE(std::holds_alternative<storyforge::agent::AgentFailure>(denied));
-    CHECK(forgery.calls == 2);
+    CHECK(forgery.calls == 3);
     CHECK(state == before_forgery);
 
     play(agent, package, state, "打开箱子取灯芯", R"({"actions":[{"type":"authored","target":"action.take-wick"}]})",
@@ -105,6 +106,8 @@ TEST_CASE("golden replay: Harbor Lantern reaches the saved-ships ending") {
     expected.variables[storyforge::VariableId{"var.knows-route"}] = true;
     expected.npc_memory[storyforge::NpcId{"npc.alan"}]["shared-route"] = true;
     expected.npc_memory[storyforge::NpcId{"npc.alan"}]["last_discussed_topic"] = std::string{"topic.old-route"};
+    expected.npc_memory[storyforge::NpcId{"npc.alan"}]["last_confirmed_reply_topic"] =
+        std::string{"topic.old-route"};
     expected.npc_relationships[storyforge::NpcId{"npc.alan"}] = 1;
     expected.completed_events.insert(storyforge::EventId{"event.ships-saved"});
     expected.turn = 4;
@@ -144,7 +147,7 @@ TEST_CASE("golden replay: Clockwork Academy reaches the sealed-bell ending") {
 
     play(agent, package, state, "向档案员打听钟声",
          R"({"actions":[{"type":"talk","target":"npc.archivist","topic":"钟声"}]})",
-         {"npc_talked"});
+         {"npc_questioned"});
     play(agent, package, state, "回到大厅", R"({"actions":[{"type":"move","target":"scene.bell-hall"}]})",
          {"scene_changed"});
     play(agent, package, state, "与导师封存晨钟",
@@ -157,6 +160,8 @@ TEST_CASE("golden replay: Clockwork Academy reaches the sealed-bell ending") {
     expected.variables[storyforge::VariableId{"var.courage"}] = std::int64_t{1};
     expected.npc_memory[storyforge::NpcId{"npc.tutor-lin"}]["reported-the-chime"] = true;
     expected.npc_memory[storyforge::NpcId{"npc.tutor-lin"}]["last_discussed_topic"] =
+        std::string{"topic.thirteenth-chime"};
+    expected.npc_memory[storyforge::NpcId{"npc.tutor-lin"}]["last_confirmed_reply_topic"] =
         std::string{"topic.thirteenth-chime"};
     expected.npc_memory[storyforge::NpcId{"npc.archivist"}]["last_discussed_topic"] = std::string{"钟声"};
     expected.completed_events.insert(storyforge::EventId{"event.bell-contained"});

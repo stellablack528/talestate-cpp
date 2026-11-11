@@ -406,6 +406,10 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
             request.kind == AgentActionKind::plan_event;
         if (!creates_fact && (!request.id.empty() || request.due_minute != 0))
             return error(RuntimeErrorCode::invalid_effect, "这个行动不接受新事实参数");
+        const bool evaluates_lead = request.kind == AgentActionKind::corroborate ||
+            request.kind == AgentActionKind::dispute;
+        if (evaluates_lead ? request.evidence.empty() : !request.evidence.empty())
+            return error(RuntimeErrorCode::invalid_effect, "证据来源参数与行动类型不匹配");
         if (request.kind == AgentActionKind::authored) {
             if (!request.topic.empty())
                 return error(RuntimeErrorCode::invalid_effect, "预设行动不接受话题参数");
@@ -469,7 +473,15 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                 return error(RuntimeErrorCode::condition_unmet, "这个 NPC 当前不在你所在的场景：" + request.target);
             const auto rule = std::find_if(found->dialogue_rules.begin(), found->dialogue_rules.end(),
                 [&](const AgentDialogueRule& value) { return value.id == request.topic; });
-            if (rule != found->dialogue_rules.end()) {
+            const auto remembered_fact = candidate.dynamic_facts.find(request.topic);
+            if (remembered_fact != candidate.dynamic_facts.end() &&
+                remembered_fact->second.source == request.target &&
+                remembered_fact->second.kind != "lead") {
+                candidate.npc_memory[found->id]["last_recalled_fact"] = request.topic;
+                events.push_back({"npc_recalled", found->name + "曾听到这件事：" +
+                    remembered_fact->second.text + "（当前状态：" +
+                    remembered_fact->second.status + "）"});
+            } else if (rule != found->dialogue_rules.end()) {
                 for (const auto& condition : rule->conditions) {
                     if (const auto* required = std::get_if<HasItemCondition>(&condition.data);
                         required && !evaluate_condition(condition, candidate)) {
@@ -494,9 +506,17 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                     if (auto failure = apply_effect(package, candidate, effect, events)) return *failure;
                 }
                 events.push_back({"npc_dialogue", found->name + "：" + rule->reply});
+                candidate.npc_memory[found->id]["last_confirmed_reply_topic"] = request.topic;
             }
             candidate.npc_memory[found->id]["last_discussed_topic"] = request.topic;
-            events.push_back({"npc_talked", "与 " + found->name + " 谈起：" + request.topic});
+            if (rule != found->dialogue_rules.end() ||
+                (remembered_fact != candidate.dynamic_facts.end() &&
+                 remembered_fact->second.source == request.target &&
+                 remembered_fact->second.kind != "lead"))
+                events.push_back({"npc_talked", "与 " + found->name + " 谈起：" + request.topic});
+            else
+                events.push_back({"npc_questioned", "你向 " + found->name + " 询问了：" +
+                    request.topic + "；对方尚未给出可确认的回答。"});
         } else if (request.kind == AgentActionKind::inspect || request.kind == AgentActionKind::take) {
             if (!request.topic.empty())
                 return error(RuntimeErrorCode::invalid_effect, "观察和拿取不接受话题参数");
@@ -585,7 +605,7 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                 else if (fact.kind == "planned_event" &&
                     candidate.world_minute >= fact.due_minute + 60) fact.status = "expired";
                 else continue;
-                candidate.event_log.push_back({fact.status, id, state.turn + 1, candidate.world_minute});
+                candidate.event_log.push_back({fact.status, id, state.turn + 1, candidate.world_minute, {}});
                 events.push_back({fact.status, fact.text});
             }
         } else if (request.kind == AgentActionKind::book || request.kind == AgentActionKind::attend) {
@@ -634,9 +654,29 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                            ch == '.' || ch == '_' || ch == '-';
                 }) || candidate.dynamic_facts.contains(request.id))
                 return error(RuntimeErrorCode::invalid_effect, "事实 ID 无效或已存在");
-            if (request.topic.empty() || request.topic.size() > 280 ||
+            const auto normalized = [&] (const std::string& input) {
+                std::string value;
+                bool pending_space = false;
+                for (unsigned char ch : input) {
+                    if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+                        pending_space = !value.empty();
+                    } else {
+                        if (pending_space) value.push_back(' ');
+                        pending_space = false;
+                        value.push_back(ch >= 'A' && ch <= 'Z' ?
+                            static_cast<char>(ch - 'A' + 'a') : static_cast<char>(ch));
+                    }
+                }
+                return value;
+            };
+            const auto content = normalized(request.topic);
+            static const std::set<std::string> placeholders{
+                "promise", "request", "plan", "lead", "clue", "help",
+                "承诺", "请求", "计划", "线索", "帮忙", "传闻"};
+            if (content.size() < 8 || placeholders.contains(content) || request.topic.size() > 280 ||
                 request.topic.find('\n') != std::string::npos || candidate.dynamic_facts.size() >= 128)
-                return error(RuntimeErrorCode::invalid_effect, "事实描述为空、过长或数量已达上限");
+                return error(RuntimeErrorCode::invalid_effect,
+                    "事实描述必须写明具体事项，不能只填 promise、request 等占位词");
             const auto npc = std::find_if(package.agent_npcs.begin(), package.agent_npcs.end(),
                 [&](const AgentNpc& value) { return value.id.value() == request.target; });
             const auto object = std::find_if(package.agent_objects.begin(), package.agent_objects.end(),
@@ -653,16 +693,82 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                 return error(RuntimeErrorCode::condition_unmet, "期限必须在未来七天内");
             for (const auto& [id, fact] : candidate.dynamic_facts) {
                 (void)id;
-                if (fact.source == request.target && fact.text == request.topic)
+                if (fact.source == request.target && fact.kind ==
+                    (request.kind == AgentActionKind::investigate ? "lead" :
+                     request.kind == AgentActionKind::promise ? "promise" :
+                     request.kind == AgentActionKind::ask_help ? "help_request" : "planned_event") &&
+                    normalized(fact.text) == content)
                     return error(RuntimeErrorCode::condition_unmet, "同一来源的这项事实已经记录");
             }
             const auto kind = request.kind == AgentActionKind::investigate ? "lead" :
                 request.kind == AgentActionKind::promise ? "promise" :
                 request.kind == AgentActionKind::ask_help ? "help_request" : "planned_event";
             candidate.dynamic_facts.emplace(request.id, DynamicFact{request.id, kind,
-                request.target, request.topic, "open", request.due_minute});
-            candidate.event_log.push_back({"created", request.id, state.turn + 1, candidate.world_minute});
-            events.push_back({"fact_created", "已记录" + std::string{kind == std::string{"lead"} ? "待核实线索：" : "约定或计划："} + request.topic});
+                request.target, content, "open", request.due_minute});
+            if (request.kind == AgentActionKind::promise || request.kind == AgentActionKind::ask_help)
+                candidate.npc_memory[npc->id][request.kind == AgentActionKind::promise ?
+                    "last_promise_id" : "last_help_request_id"] = request.id;
+            candidate.event_log.push_back({"created", request.id, state.turn + 1, candidate.world_minute, {}});
+            events.push_back({"fact_created", "已记录" + std::string{kind == std::string{"lead"} ? "待核实线索：" : "约定或计划："} + content});
+        } else if (evaluates_lead) {
+            if (!request.topic.empty())
+                return error(RuntimeErrorCode::invalid_effect, "线索跟进不接受自由描述");
+            const auto found = candidate.dynamic_facts.find(request.target);
+            if (found == candidate.dynamic_facts.end() || found->second.kind != "lead" ||
+                found->second.status != "open")
+                return error(RuntimeErrorCode::condition_unmet, "没有可跟进的待核实线索");
+            if (request.evidence == found->second.source)
+                return error(RuntimeErrorCode::condition_unmet, "不能用原始来源重复证明线索");
+            const bool object_here = std::any_of(package.agent_objects.begin(), package.agent_objects.end(),
+                [&](const AgentObject& object) { return object.id == request.evidence &&
+                    object.scene == candidate.position.scene &&
+                    !candidate.collected_objects.contains(object.id); });
+            const bool npc_here = std::any_of(package.agent_npcs.begin(), package.agent_npcs.end(),
+                [&](const AgentNpc& npc) { return npc.id.value() == request.evidence &&
+                    npc.scene == candidate.position.scene; });
+            if (!object_here && !npc_here)
+                return error(RuntimeErrorCode::condition_unmet, "独立来源不存在或不在当前地点");
+            found->second.status = request.kind == AgentActionKind::corroborate ? "corroborated" : "disputed";
+            candidate.event_log.push_back({found->second.status, request.target,
+                state.turn + 1, candidate.world_minute, request.evidence});
+            events.push_back({"lead_updated", "线索已获得独立来源的" +
+                std::string{found->second.status == "corroborated" ? "支持" : "质疑"} +
+                "；这仍不是世界真相的最终证明：" + found->second.text});
+        } else if (request.kind == AgentActionKind::withdraw_help ||
+                   request.kind == AgentActionKind::respond_help) {
+            const auto found = candidate.dynamic_facts.find(request.target);
+            if (found == candidate.dynamic_facts.end() || found->second.kind != "help_request" ||
+                found->second.status != "open")
+                return error(RuntimeErrorCode::condition_unmet, "没有可处理的求助请求");
+            if (request.kind == AgentActionKind::withdraw_help) {
+                if (!request.topic.empty())
+                    return error(RuntimeErrorCode::invalid_effect, "撤回求助不接受话题参数");
+                found->second.status = "withdrawn";
+            } else {
+                const auto npc = std::find_if(package.agent_npcs.begin(), package.agent_npcs.end(),
+                    [&](const AgentNpc& value) { return value.id.value() == found->second.source; });
+                if (npc == package.agent_npcs.end() || npc->scene != candidate.position.scene)
+                    return error(RuntimeErrorCode::condition_unmet, "求助对象当前不在场");
+                const bool accepted = request.topic.rfind("help.accept.", 0) == 0;
+                const bool declined = request.topic.rfind("help.decline.", 0) == 0;
+                const auto rule = std::find_if(npc->dialogue_rules.begin(), npc->dialogue_rules.end(),
+                    [&](const AgentDialogueRule& value) { return value.id == request.topic; });
+                if ((!accepted && !declined) || rule == npc->dialogue_rules.end() ||
+                    !std::all_of(rule->conditions.begin(), rule->conditions.end(),
+                        [&](const StoryCondition& condition) { return evaluate_condition(condition, candidate); }))
+                    return error(RuntimeErrorCode::condition_unmet, "世界包没有授权这个人物作出该回应");
+                for (const auto& effect : rule->effects) {
+                    if (std::holds_alternative<SwitchSceneEffect>(effect.data) ||
+                        std::holds_alternative<AdvanceChapterEffect>(effect.data))
+                        return error(RuntimeErrorCode::invalid_effect, "NPC 回应不能直接移动玩家");
+                    if (auto failure = apply_effect(package, candidate, effect, events)) return *failure;
+                }
+                found->second.status = accepted ? "accepted" : "declined";
+                events.push_back({"npc_dialogue", npc->name + "：" + rule->reply});
+            }
+            candidate.event_log.push_back({found->second.status, request.target,
+                state.turn + 1, candidate.world_minute, {}});
+            events.push_back({"help_updated", "求助请求状态：" + found->second.status});
         } else if (request.kind == AgentActionKind::attend_plan) {
             if (!request.topic.empty()) return error(RuntimeErrorCode::invalid_effect, "参加计划不接受描述");
             const auto found = candidate.dynamic_facts.find(request.target);
@@ -677,7 +783,7 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                 return error(RuntimeErrorCode::condition_unmet, "人物、地点或时间不满足计划条件");
             found->second.status = "occurred";
             candidate.event_log.push_back({"occurred", request.target,
-                state.turn + 1, candidate.world_minute});
+                state.turn + 1, candidate.world_minute, {}});
             events.push_back({"planned_event_occurred", found->second.text});
         } else if (request.kind == AgentActionKind::fulfill || request.kind == AgentActionKind::break_promise) {
             if (!request.topic.empty()) return error(RuntimeErrorCode::invalid_effect, "履约行动不接受描述");
@@ -692,7 +798,7 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                 return error(RuntimeErrorCode::condition_unmet, "履约需要与承诺对象在同一地点");
             found->second.status = request.kind == AgentActionKind::fulfill ? "fulfilled" : "broken";
             candidate.event_log.push_back({found->second.status, request.target,
-                state.turn + 1, candidate.world_minute});
+                state.turn + 1, candidate.world_minute, {}});
             events.push_back({"promise_updated", found->second.text});
         } else {
             return error(RuntimeErrorCode::invalid_effect, "未知的行动类型");
@@ -711,7 +817,7 @@ CommandResult execute_agent_actions(const StoryPackage& package, StoryState& sta
     std::vector<AgentActionRequest> requests;
     requests.reserve(actions.size());
     for (const auto& action : actions)
-        requests.push_back({AgentActionKind::authored, action.value(), {}, {}, {}, 0});
+        requests.push_back({AgentActionKind::authored, action.value(), {}, {}, {}, 0, {}});
     return execute_agent_requests(package, state, requests);
 }
 

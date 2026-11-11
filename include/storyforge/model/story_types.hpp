@@ -160,7 +160,8 @@ struct AgentObject {
 };
 
 enum class AgentActionKind { authored, move, talk, inspect, take, give, use, wait, book, attend,
-    investigate, promise, fulfill, break_promise, ask_help, plan_event, attend_plan };
+    investigate, promise, fulfill, break_promise, ask_help, plan_event, attend_plan,
+    corroborate, dispute, withdraw_help, respond_help };
 
 struct AgentAppointment {
     std::string id;
@@ -190,6 +191,7 @@ struct AgentActionRequest {
     std::string item;
     std::string id;
     std::uint64_t due_minute{0};
+    std::string evidence;
 };
 
 struct DynamicFact {
@@ -207,6 +209,7 @@ struct DynamicEvent {
     std::string fact_id;
     std::uint64_t turn{0};
     std::uint64_t minute{0};
+    std::string source;
     bool operator==(const DynamicEvent&) const = default;
 };
 

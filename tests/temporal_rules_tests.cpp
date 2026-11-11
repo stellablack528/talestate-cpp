@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
+#include <algorithm>
 #include <optional>
 #include <filesystem>
 #include <utility>
@@ -200,4 +201,138 @@ TEST_CASE("dynamic facts and commitments are sourced and atomic") {
         {{storyforge::AgentActionKind::wait, "120"}});
     REQUIRE(std::holds_alternative<storyforge::StoryDelta>(elapsed));
     CHECK(late.dynamic_facts.at("fact.late-meeting").status == "expired");
+}
+
+TEST_CASE("leads and help requests develop through authorized sources and survive saves") {
+    auto loaded = storyforge::load_story_package(
+        std::filesystem::path{STORYFORGE_SOURCE_DIR} / "examples" / "harbor-lantern");
+    REQUIRE(loaded.package.has_value());
+    auto package = *loaded.package;
+    auto state = storyforge::make_initial_state(package);
+    auto lead = storyforge::execute_agent_requests(package, state,
+        {{storyforge::AgentActionKind::investigate, "object.tide-chart", "图表时间需要复核", {},
+          "fact.chart-time"}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(lead));
+    auto before = state;
+    storyforge::AgentActionRequest wrong{storyforge::AgentActionKind::corroborate, "fact.chart-time"};
+    wrong.evidence = "object.tide-chart";
+    CHECK(std::holds_alternative<storyforge::RuntimeError>(
+        storyforge::execute_agent_requests(package, state, {wrong})));
+    CHECK(state == before);
+    wrong.evidence = "npc.alan";
+    auto supported = storyforge::execute_agent_requests(package, state, {wrong});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(supported));
+    CHECK(state.dynamic_facts.at("fact.chart-time").status == "corroborated");
+    CHECK(state.event_log.back().source == "npc.alan");
+    before = state;
+    CHECK(std::holds_alternative<storyforge::RuntimeError>(
+        storyforge::execute_agent_requests(package, state, {wrong})));
+    CHECK(state == before);
+
+    auto help = storyforge::execute_agent_requests(package, state,
+        {{storyforge::AgentActionKind::ask_help, "npc.alan", "帮忙核对图表", {}, "fact.ask-alan"}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(help));
+    auto unauthorized = storyforge::execute_agent_requests(package, state,
+        {{storyforge::AgentActionKind::respond_help, "fact.ask-alan", "help.accept.route"}});
+    CHECK(std::holds_alternative<storyforge::RuntimeError>(unauthorized));
+    CHECK(state.dynamic_facts.at("fact.ask-alan").status == "open");
+    const auto npc = std::find_if(package.agent_npcs.begin(), package.agent_npcs.end(),
+        [](const storyforge::AgentNpc& value) { return value.id.value() == "npc.alan"; });
+    REQUIRE(npc != package.agent_npcs.end());
+    npc->dialogue_rules.push_back({"help.accept.route", "答应协助核对", "我会帮你核对。", {}, {}});
+    auto accepted = storyforge::execute_agent_requests(package, state,
+        {{storyforge::AgentActionKind::respond_help, "fact.ask-alan", "help.accept.route"}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(accepted));
+    CHECK(state.dynamic_facts.at("fact.ask-alan").status == "accepted");
+    auto encoded = storyforge::serialize_story_save(package, state);
+    REQUIRE(std::holds_alternative<std::string>(encoded));
+    auto decoded = storyforge::deserialize_story_save(package, std::get<std::string>(encoded));
+    REQUIRE(std::holds_alternative<storyforge::StoryState>(decoded));
+    CHECK(std::get<storyforge::StoryState>(decoded) == state);
+    const auto before_batch = state;
+    auto rejected_batch = storyforge::execute_agent_requests(package, state,
+        {{storyforge::AgentActionKind::ask_help, "npc.alan", "一起看图", {}, "fact.batch-help"},
+         {storyforge::AgentActionKind::respond_help, "fact.batch-help", "help.accept.unknown"}});
+    CHECK(std::holds_alternative<storyforge::RuntimeError>(rejected_batch));
+    CHECK(state == before_batch);
+
+    auto other = storyforge::make_initial_state(package);
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(
+        storyforge::execute_agent_requests(package, other,
+            {{storyforge::AgentActionKind::investigate, "object.tide-chart", "时间有疑点", {},
+              "fact.other-chart"}})));
+    storyforge::AgentActionRequest disputed{storyforge::AgentActionKind::dispute, "fact.other-chart"};
+    disputed.evidence = "npc.alan";
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(
+        storyforge::execute_agent_requests(package, other, {disputed})));
+    CHECK(other.dynamic_facts.at("fact.other-chart").status == "disputed");
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(
+        storyforge::execute_agent_requests(package, other,
+            {{storyforge::AgentActionKind::ask_help, "npc.alan", "帮忙查证", {}, "fact.ask-again"}})));
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(
+        storyforge::execute_agent_requests(package, other,
+            {{storyforge::AgentActionKind::withdraw_help, "fact.ask-again"}})));
+    CHECK(other.dynamic_facts.at("fact.ask-again").status == "withdrawn");
+}
+
+TEST_CASE("the same help resolution protocol works in unrelated worlds") {
+    for (const auto& title : {std::string{"campus"}, std::string{"monastery"}}) {
+        auto package = world(title);
+        package.agent_npcs.front().dialogue_rules.push_back(
+            {"help.decline.busy", "拒绝协助", "现在没有时间帮你。", {}, {}});
+        auto state = storyforge::make_initial_state(package);
+        auto request = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::ask_help, "npc.host", "请求帮忙", {}, "fact.ask-host"}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(request));
+        auto response = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::respond_help, "fact.ask-host", "help.decline.busy"}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(response));
+        CHECK(state.dynamic_facts.at("fact.ask-host").status == "declined");
+        const auto before_repeat = state;
+        CHECK(std::holds_alternative<storyforge::RuntimeError>(
+            storyforge::execute_agent_requests(package, state,
+                {{storyforge::AgentActionKind::respond_help, "fact.ask-host", "help.decline.busy"}})));
+        CHECK(state == before_repeat);
+    }
+}
+
+TEST_CASE("concrete promises survive saves and NPCs recall only committed content") {
+    for (const auto& title : {std::string{"campus"}, std::string{"monastery"}}) {
+        auto package = world(title);
+        auto state = storyforge::make_initial_state(package);
+        const auto initial = state;
+        auto placeholder = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::promise, "npc.host", "promise", {}, "fact.empty", 120}});
+        REQUIRE(std::holds_alternative<storyforge::RuntimeError>(placeholder));
+        CHECK(state == initial);
+        auto promised = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::promise, "npc.host", "明天核对活动资料", {}, "fact.check-records", 120}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(promised));
+        CHECK(state.npc_memory.at(storyforge::NpcId{"npc.host"}).at("last_promise_id") ==
+            storyforge::StoryValue{std::string{"fact.check-records"}});
+        const auto before_duplicate = state;
+        auto duplicate = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::promise, "npc.host", " 明天核对活动资料 ", {}, "fact.second-id", 150}});
+        REQUIRE(std::holds_alternative<storyforge::RuntimeError>(duplicate));
+        CHECK(state == before_duplicate);
+        auto saved = storyforge::serialize_story_save(package, state);
+        REQUIRE(std::holds_alternative<std::string>(saved));
+        auto restored = storyforge::deserialize_story_save(package, std::get<std::string>(saved));
+        REQUIRE(std::holds_alternative<storyforge::StoryState>(restored));
+        auto resumed = std::get<storyforge::StoryState>(restored);
+        auto recalled = storyforge::execute_agent_requests(package, resumed,
+            {{storyforge::AgentActionKind::talk, "npc.host", "fact.check-records"}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(recalled));
+        const auto& events = std::get<storyforge::StoryDelta>(recalled).events;
+        CHECK(std::any_of(events.begin(), events.end(), [](const storyforge::StoryEvent& event) {
+            return event.type == "npc_recalled" && event.text.find("明天核对活动资料") != std::string::npos;
+        }));
+        CHECK(std::none_of(events.begin(), events.end(), [](const storyforge::StoryEvent& event) {
+            return event.type == "npc_dialogue";
+        }));
+        auto question = storyforge::execute_agent_requests(package, resumed,
+            {{storyforge::AgentActionKind::talk, "npc.host", "你能告诉我秘密吗"}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(question));
+        CHECK(std::get<storyforge::StoryDelta>(question).events.front().type == "npc_questioned");
+    }
 }
