@@ -302,6 +302,24 @@ TEST_CASE("narration-only proposal does not invent committed outcomes") {
           std::string::npos);
 }
 
+TEST_CASE("rejected action explains the obstacle and offers a legal next move") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    const auto before = state;
+    FakeProvider provider;
+    provider.responses = {
+        reply(R"({"actions":[{"type":"authored","target":"action.give-diamond"}]})"),
+        reply(R"({"actions":[]})")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "凭空取得钻石", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    const auto& narration = std::get<storyforge::agent::AgentTurn>(result).narration;
+    CHECK(narration.find("未授权") != std::string::npos);
+    CHECK(narration.find("可以尝试") != std::string::npos);
+    CHECK(state.inventory == before.inventory);
+    CHECK(state.gold == before.gold);
+}
+
 TEST_CASE("agent repairs a placeholder promise before the engine stores it") {
     auto package = example("harbor-lantern");
     auto state = storyforge::make_initial_state(package);

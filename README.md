@@ -310,6 +310,8 @@ talestate-cpp/
 - [x] 导入世界包、BYOK 配置、自由文字输入和权威状态展示
 - [x] 无需世界包的独立“测试连接”按钮与安全错误分类
 - [x] Qt 手动存档／读档及世界包 ID／版本校验
+- [x] 可选世界日历、学期与假期；跳到下一关键时刻并按时间顺序结算失约
+- [x] 有来源事件和关系门槛的 NPC 日程；计划与位置变化可读档恢复
 - [x] 钟塔学院与雾港的固定 Agent 剧情回放、非法行动拒绝与精确终局状态测试
 
 ### 🚧 下一阶段 / Next Phase
@@ -468,8 +470,9 @@ ctest --test-dir build -C Release --output-on-failure
 - 两个不同世界共用 `inspect` / `take` 协议、重复拿取拒绝与读档后物品状态恢复
 - 两个不同世界共用 `give` / `use` 协议、背包不足拒绝和物品效果原子提交
 - 最小连接请求、错误分类与本机模拟服务成功／认证失败测试
+- 跨学期日期、假期、跳跃结算、NPC 日程条件与存档恢复测试
 
-当前基线：**56 项核心自动化测试通过**；安装 Qt 时再运行桌面启动和 Qt 集成测试，本机合计 **58/58 通过**（集成测试内部覆盖连接响应、认证失败及真实文件存取）。
+当前基线：**75 项核心自动化测试、1224 个断言通过**；本机 Qt 桌面启动、布局和世界设定表检查也通过。
 
 其中模型接口测试使用内存中的假网络传输，不会读取真实 API Key、访问外部服务或产生模型费用。
 
@@ -496,6 +499,8 @@ ctest --test-dir build -C Release --output-on-failure
 完整字段定义见 [Story Package v1 格式说明](docs/format/story-package-v1.md) 和 [JSON Schema](schemas/story-package-v1.schema.json)。请注意：上面的片段只展示顶层形状，空章节数组不能通过语义校验；可运行示例请参考 [Clockwork Academy](examples/clockwork-academy/story.json)。
 
 Story Package v1 同时支持传统固定选项、`agent_actions` 授权行动，以及 `agent_routes` / `agent_npcs` / `agent_objects` / `agent_item_rules` 支撑的通用移动、交谈、观察、拿取、给予与使用。玩家可以自由输入文字，由 Agent 提出带类型和目标的行动；C++ 引擎核对世界规则后才提交。这不是无限制的状态编辑。后续格式会进一步区分世界事实、剧情锚点、动态结局条件与 Agent 候选事件。
+
+可选的 `calendar` 与 `agent_timeline` 能定义真实日期、学期、假期和 NPC 关键日程。玩家可在桌面界面跳到下一关键时刻；引擎会结算途中到期的承诺和预约，再根据来源事件与人物关系判断 NPC 是否改变计划。格式示例见 [Story Package v1 格式说明](docs/format/story-package-v1.md)。
 
 ---
 

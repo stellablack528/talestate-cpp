@@ -3,6 +3,7 @@
 #include "storyforge/model/story_types.hpp"
 
 #include <string>
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -31,6 +32,16 @@ using CommandResult = std::variant<StoryDelta, RuntimeError>;
     const StoryPackage& package, const StoryState& state);
 [[nodiscard]] const StoryScene* current_scene(const StoryPackage& package, const StoryState& state);
 [[nodiscard]] const StoryNode* current_node(const StoryPackage& package, const StoryState& state);
+[[nodiscard]] SceneId npc_current_scene(const AgentNpc& npc, const StoryState& state);
+struct CalendarMoment {
+    std::string date;
+    std::string term;
+    bool school_day{false};
+    std::uint32_t hour{0};
+    std::uint32_t minute{0};
+};
+[[nodiscard]] std::optional<CalendarMoment> calendar_at(const StoryPackage& package,
+                                                         std::uint64_t world_minute);
 [[nodiscard]] bool evaluate_condition(const StoryCondition& condition, const StoryState& state);
 [[nodiscard]] bool choice_is_available(const StoryChoice& choice, const StoryState& state);
 

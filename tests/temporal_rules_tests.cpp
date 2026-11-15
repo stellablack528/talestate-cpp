@@ -2,6 +2,7 @@
 #include "storyforge/io/story_loader.hpp"
 #include "storyforge/io/story_save.hpp"
 #include "storyforge/runtime/story_runtime.hpp"
+#include "storyforge/validation/validation.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
@@ -74,6 +75,122 @@ TEST_CASE("agent can turn free text into checked appointments") {
     }
     CHECK(state.world_minute == 60);
     CHECK(state.appointments.at("appointment.first") == storyforge::AppointmentStatus::attended);
+}
+
+TEST_CASE("calendar skip settles deadlines then moves an NPC at a sourced beat") {
+    auto package = world("school-year");
+    package.calendar = storyforge::StoryCalendar{"2026-09-01", 8,
+        {{"秋学期", 0, 120}}, {{"短假", 5, 6}}};
+    package.agent_timeline.push_back({storyforge::EventId{"event.club-opens"},
+        10080, storyforge::NpcId{"npc.host"},
+        storyforge::EventId{"event.orientation"}, 1,
+        "根据入学介绍，在活动室主持社团开放日", storyforge::SceneId{"scene.room"}});
+    package.agent_actions.push_back({storyforge::ChoiceId{"action.orientation"},
+        "参加入学介绍", {},
+        {storyforge::StoryEffect{storyforge::CompleteEventEffect{
+            storyforge::EventId{"event.orientation"}}},
+         storyforge::StoryEffect{storyforge::ModifyNpcRelationshipEffect{
+            storyforge::NpcId{"npc.host"}, 1}}}, std::nullopt});
+    REQUIRE(storyforge::validate_story_package(package).valid());
+    auto invalid_source = package;
+    invalid_source.agent_timeline.front().source_event =
+        storyforge::EventId{"event.unknown"};
+    CHECK_FALSE(storyforge::validate_story_package(invalid_source).valid());
+    auto without_source = storyforge::make_initial_state(package);
+    without_source.npc_relationships[storyforge::NpcId{"npc.host"}] = 1;
+    REQUIRE(std::holds_alternative<storyforge::RuntimeError>(
+        storyforge::execute_agent_requests(package, without_source,
+            {{storyforge::AgentActionKind::skip, "next"}})));
+    CHECK(without_source.world_minute == 0);
+    auto without_relationship = storyforge::make_initial_state(package);
+    without_relationship.completed_events.insert(storyforge::EventId{"event.orientation"});
+    REQUIRE(std::holds_alternative<storyforge::RuntimeError>(
+        storyforge::execute_agent_requests(package, without_relationship,
+            {{storyforge::AgentActionKind::skip, "next"}})));
+    CHECK(without_relationship.world_minute == 0);
+    auto state = storyforge::make_initial_state(package);
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(
+        storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::authored, "action.orientation"}})));
+    const auto holiday = storyforge::calendar_at(package, 6ULL * 1440);
+    REQUIRE(holiday.has_value());
+    CHECK(holiday->date == "2026-09-07");
+    CHECK_FALSE(holiday->school_day);
+    auto appointment = storyforge::execute_agent_requests(package, state,
+        {{storyforge::AgentActionKind::book, "appointment.first"}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(appointment));
+    storyforge::AgentActionRequest promise;
+    promise.kind = storyforge::AgentActionKind::promise;
+    promise.target = "npc.host";
+    promise.topic = "三天后核对社团登记名单";
+    promise.id = "fact.club-list";
+    promise.due_minute = 3000;
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(
+        storyforge::execute_agent_requests(package, state, {promise})));
+    auto skip = [&] {
+        return storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::skip, "next"}});
+    };
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(skip()));
+    CHECK(state.world_minute == 60);
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(skip()));
+    CHECK(state.world_minute == 3000);
+    CHECK(state.appointments.at("appointment.first") == storyforge::AppointmentStatus::missed);
+    CHECK(state.dynamic_facts.at("fact.club-list").status == "broken");
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(skip()));
+    CHECK(state.world_minute == 10080);
+    CHECK(state.completed_events.contains(storyforge::EventId{"event.club-opens"}));
+    CHECK(storyforge::npc_current_scene(package.agent_npcs.front(), state) ==
+          storyforge::SceneId{"scene.room"});
+    const auto moment = storyforge::calendar_at(package, state.world_minute);
+    REQUIRE(moment.has_value());
+    CHECK(moment->date == "2026-09-08");
+    CHECK(moment->school_day);
+    CHECK(moment->term == "秋学期");
+    const auto saved = storyforge::serialize_story_save(package, state);
+    if (const auto* failure = std::get_if<storyforge::SaveError>(&saved))
+        INFO(failure->message);
+    REQUIRE(std::holds_alternative<std::string>(saved));
+    const auto loaded = storyforge::deserialize_story_save(package, std::get<std::string>(saved));
+    REQUIRE(std::holds_alternative<storyforge::StoryState>(loaded));
+    CHECK(std::get<storyforge::StoryState>(loaded) == state);
+    const auto before = state;
+    REQUIRE(std::holds_alternative<storyforge::RuntimeError>(skip()));
+    CHECK(state == before);
+}
+
+TEST_CASE("one skip can cross seven school years without daily turns") {
+    auto package = world("long-school");
+    package.calendar = storyforge::StoryCalendar{"2026-09-01", 8,
+        {{"七年课程", 0, 3650}}, {}};
+    constexpr std::uint64_t graduation = 2557ULL * 1440;
+    package.agent_timeline.push_back({storyforge::EventId{"event.graduation"},
+        graduation, storyforge::NpcId{"npc.host"}, {}, -100,
+        "准备毕业典礼", storyforge::SceneId{"scene.room"}});
+    auto state = storyforge::make_initial_state(package);
+    storyforge::AgentActionRequest promise;
+    promise.kind = storyforge::AgentActionKind::promise;
+    promise.target = "npc.host";
+    promise.topic = "毕业前归还借用的书籍";
+    promise.id = "fact.return-books";
+    promise.due_minute = graduation;
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(
+        storyforge::execute_agent_requests(package, state, {promise})));
+    const auto jumped = storyforge::execute_agent_requests(package, state,
+        {{storyforge::AgentActionKind::skip, "next"}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(jumped));
+    CHECK(state.turn == 2);
+    CHECK(state.world_minute == graduation);
+    CHECK(state.dynamic_facts.at("fact.return-books").status == "broken");
+    CHECK(state.completed_events.contains(storyforge::EventId{"event.graduation"}));
+    const auto moment = storyforge::calendar_at(package, state.world_minute);
+    REQUIRE(moment.has_value());
+    CHECK(moment->date == "2033-09-01");
+    const auto saved = storyforge::serialize_story_save(package, state);
+    REQUIRE(std::holds_alternative<std::string>(saved));
+    const auto restored = storyforge::deserialize_story_save(package, std::get<std::string>(saved));
+    REQUIRE(std::holds_alternative<storyforge::StoryState>(restored));
+    CHECK(std::get<storyforge::StoryState>(restored) == state);
 }
 }
 

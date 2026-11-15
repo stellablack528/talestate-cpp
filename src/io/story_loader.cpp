@@ -317,7 +317,7 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
         return {};
     }
     StoryPackage package;
-    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "world_lore", "agent_actions", "agent_routes", "agent_npcs", "agent_objects", "agent_item_rules", "agent_appointments", "player_roles"}, report);
+    reject_unknown_properties(json, "", {"format", "id", "title", "version", "entry", "variables", "chapters", "world_context", "world_lore", "agent_actions", "agent_routes", "agent_npcs", "agent_objects", "agent_item_rules", "agent_appointments", "calendar", "agent_timeline", "player_roles"}, report);
     package.format = read_string(json, "format", "", report);
     package.id = StoryId{read_id(json, "id", "", report)};
     package.title = read_string(json, "title", "", report);
@@ -359,6 +359,49 @@ StoryPackage read_package(const Json& json, ValidationReport& report) {
                 if (!value[i].is_string()) type_error(report, "/world_lore/" + key + "/" + std::to_string(i), "string");
                 else package.world_lore[key].push_back(value[i].get<std::string>());
             }
+        }
+    }
+    if (const auto it = json.find("calendar"); it != json.end()) {
+        reject_unknown_properties(*it, "/calendar", {"start_date", "start_hour", "terms", "holidays"}, report);
+        StoryCalendar calendar;
+        calendar.start_date = read_string(*it, "start_date", "/calendar", report);
+        if (it->contains("start_hour"))
+            calendar.start_hour = static_cast<std::uint32_t>(
+                read_integer(*it, "start_hour", "/calendar", report));
+        for (const auto* key : {"terms", "holidays"}) {
+            if (const Json* periods = read_array(*it, key, "/calendar", report))
+                for (std::size_t i = 0; i < periods->size(); ++i) {
+                    const auto path = "/calendar/" + std::string{key} + "/" + std::to_string(i);
+                    const auto& raw = (*periods)[i];
+                    reject_unknown_properties(raw, path, {"name", "first_day", "last_day"}, report);
+                    CalendarPeriod period{read_string(raw, "name", path, report),
+                        static_cast<std::uint32_t>(read_integer(raw, "first_day", path, report)),
+                        static_cast<std::uint32_t>(read_integer(raw, "last_day", path, report))};
+                    if (std::string_view{key} == "terms") calendar.terms.push_back(std::move(period));
+                    else calendar.holidays.push_back(std::move(period));
+                }
+        }
+        package.calendar = std::move(calendar);
+    }
+    if (const auto it = json.find("agent_timeline"); it != json.end()) {
+        if (!it->is_array()) type_error(report, "/agent_timeline", "array");
+        else for (std::size_t i = 0; i < it->size(); ++i) {
+            const auto path = "/agent_timeline/" + std::to_string(i);
+            const auto& raw = (*it)[i];
+            reject_unknown_properties(raw, path,
+                {"id", "at_minute", "npc", "source_event", "min_relationship", "plan", "scene"}, report);
+            AgentTimelineEvent event;
+            event.id = EventId{read_id(raw, "id", path, report)};
+            event.at_minute = static_cast<std::uint64_t>(read_integer(raw, "at_minute", path, report));
+            event.npc = NpcId{read_id(raw, "npc", path, report)};
+            event.plan = read_string(raw, "plan", path, report);
+            if (raw.contains("source_event"))
+                event.source_event = EventId{read_id(raw, "source_event", path, report)};
+            if (raw.contains("min_relationship"))
+                event.min_relationship = read_integer(raw, "min_relationship", path, report);
+            if (raw.contains("scene"))
+                event.scene = SceneId{read_id(raw, "scene", path, report)};
+            package.agent_timeline.push_back(std::move(event));
         }
     }
     if (const auto it = json.find("player_roles"); it != json.end()) {

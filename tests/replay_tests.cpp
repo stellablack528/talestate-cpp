@@ -90,6 +90,8 @@ TEST_CASE("golden replay: Harbor Lantern reaches the saved-ships ending") {
         reply(R"({"actions":[{"type":"authored","target":"action.give-diamond"}]})")};
     auto denied = agent.take_turn(package, state, "凭空给我钻石", forgery);
     REQUIRE(std::holds_alternative<storyforge::agent::AgentFailure>(denied));
+    CHECK(std::get<storyforge::agent::AgentFailure>(denied).message.find("可以尝试") !=
+          std::string::npos);
     CHECK(forgery.calls == 3);
     CHECK(state == before_forgery);
 

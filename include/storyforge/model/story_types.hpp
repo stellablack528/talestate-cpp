@@ -13,6 +13,8 @@
 
 namespace storyforge {
 
+inline constexpr std::uint64_t max_world_minute = 3651ULL * 1440;
+
 template <typename Tag>
 class StrongId {
 public:
@@ -159,7 +161,7 @@ struct AgentObject {
     std::optional<ItemId> item;
 };
 
-enum class AgentActionKind { authored, move, talk, inspect, take, give, use, wait, book, attend,
+enum class AgentActionKind { authored, move, talk, inspect, take, give, use, wait, skip, book, attend,
     investigate, promise, fulfill, break_promise, ask_help, plan_event, attend_plan,
     corroborate, dispute, withdraw_help, respond_help };
 
@@ -170,6 +172,29 @@ struct AgentAppointment {
     SceneId scene;
     std::uint64_t start_minute{0};
     std::uint64_t duration_minutes{0};
+};
+
+struct CalendarPeriod {
+    std::string name;
+    std::uint32_t first_day{0};
+    std::uint32_t last_day{0};
+};
+
+struct StoryCalendar {
+    std::string start_date;
+    std::uint32_t start_hour{0};
+    std::vector<CalendarPeriod> terms;
+    std::vector<CalendarPeriod> holidays;
+};
+
+struct AgentTimelineEvent {
+    EventId id;
+    std::uint64_t at_minute{0};
+    NpcId npc;
+    EventId source_event;
+    std::int64_t min_relationship{-100};
+    std::string plan;
+    std::optional<SceneId> scene;
 };
 
 enum class AppointmentStatus { booked, attended, missed };
@@ -282,6 +307,8 @@ struct StoryPackage {
     std::vector<AgentObject> agent_objects;
     std::vector<AgentItemRule> agent_item_rules;
     std::vector<AgentAppointment> agent_appointments;
+    std::optional<StoryCalendar> calendar;
+    std::vector<AgentTimelineEvent> agent_timeline;
     std::vector<PlayerRole> player_roles;
 };
 

@@ -133,6 +133,26 @@ NPC 关系值默认从 `0` 开始，可用 `npc_relationship` 条件比较；
 
 运行时要求变量比较值、`set`/`add` 效果与变量声明的初始类型一致；有序比较只用于数字。一个选项只能指定一种位置跳转：`target_node`、`switch_scene` 或 `advance_chapter`。`play` 执行时先在临时状态中检查整轮效果，只有全部成功才提交；物品或金币不足、数值溢出等失败不会留下半次状态变化。终局节点没有后续行动。
 
+### 可选日历与人物日程
+
+`calendar` 给从开局起计算的 `world_minute` 指定真实起点。`terms` 和 `holidays` 用从开局日期算起的日偏移，首日为 `0`；阶段须按顺序排列且不能重叠。周一至周五且处于学期、假期之外时显示为上课日。
+
+```json
+"calendar": {
+  "start_date": "2026-09-01", "start_hour": 8,
+  "terms": [{"name": "第一学年秋学期", "first_day": 0, "last_day": 120}],
+  "holidays": [{"name": "秋假", "first_day": 40, "last_day": 46}]
+},
+"agent_timeline": [{
+  "id": "event.club-fair", "at_minute": 10080,
+  "npc": "npc.teacher", "source_event": "event.orientation",
+  "min_relationship": 1, "plan": "在活动室主持社团开放日",
+  "scene": "scene.activity-room"
+}]
+```
+
+日程事件在规定时间之后、来源事件已发生且关系达到门槛时生效一次。生效后引擎保存 NPC 的当前计划、位置、来源和发生时间。`source_event` 与 `scene` 可省略；没有来源事件时，时间与关系仍需满足。`skip` 行动以 `next` 为目标，跳到下一个可触发事件或未完成约定，并按实际时间顺序结算途中错过的预约和到期承诺；如果没有这样的时刻，会拒绝跳跃并保持原状态。最长时间轴为约十年，适合跨学期游玩。
+
 ## 校验层次
 
 1. JSON 语法与输入大小（当前上限 16 MiB）。

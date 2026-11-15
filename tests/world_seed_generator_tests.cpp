@@ -22,6 +22,14 @@ public:
     storyforge::agent::ChatResult chat(const storyforge::agent::ChatRequest& request) override {
         ++calls;
         if (!request.messages.empty() &&
+            request.messages.front().content.find("WORLD_REQUIREMENTS_V1") != std::string::npos) {
+            const auto details = nlohmann::json::parse(response, nullptr, false);
+            if (details.is_object() && details.contains("requirements"))
+                return storyforge::agent::ChatResponse{details["requirements"].dump(), {}, {}};
+            return storyforge::agent::ChatResponse{
+                R"({"attributes":[],"tradeoffs":[]})", {}, {}};
+        }
+        if (!request.messages.empty() &&
             request.messages.front().content.find("WORLD_SPEC_V0") != std::string::npos) {
             const auto details = nlohmann::json::parse(response, nullptr, false);
             if (details.is_object() && details.contains("world_spec"))
@@ -43,6 +51,7 @@ public:
             auto content = details;
             content.erase("world_spec");
             content.erase("npcs");
+            content.erase("timeline");
             return storyforge::agent::ChatResponse{content.dump(), {}, {}};
         }
         if (!request.messages.empty() &&
@@ -53,13 +62,15 @@ public:
                 if (next.is_object() && next.contains("npcs") && next.contains("appointments"))
                     return storyforge::agent::ChatResponse{
                         nlohmann::json{{"npcs", next["npcs"]},
-                                       {"appointments", next["appointments"]}}.dump(), {}, {}};
+                                       {"appointments", next["appointments"]},
+                                       {"timeline", next.value("timeline", nlohmann::json::array())}}.dump(), {}, {}};
                 return storyforge::agent::ChatResponse{"{}", {}, {}};
             }
             if (details.is_object() && details.contains("npcs") && details.contains("appointments"))
                 return storyforge::agent::ChatResponse{
                     nlohmann::json{{"npcs", details["npcs"]},
-                                   {"appointments", details["appointments"]}}.dump(), {}, {}};
+                                   {"appointments", details["appointments"]},
+                                   {"timeline", details.value("timeline", nlohmann::json::array())}}.dump(), {}, {}};
             return storyforge::agent::ChatResponse{"{}", {}, {}};
         }
         if (!queued.empty()) {
@@ -140,6 +151,16 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
                 npc.erase("initial_relationship");
             }
         }
+        if (title == "魔法学园") {
+            details["calendar"] = {{"start_date", "2026-09-01"}, {"start_hour", 8},
+                {"terms", nlohmann::json::array({{{"name", "秋学期"},
+                    {"first_day", 0}, {"last_day", 120}}})},
+                {"holidays", nlohmann::json::array()}};
+            details["timeline"] = nlohmann::json::array({{{"id", "research_day"},
+                {"npc", "gate_keeper"}, {"scene", "hall"},
+                {"plan", "到大厅准备研究日"}, {"at_minute", 2880},
+                {"min_relationship", -100}, {"source_action", ""}}});
+        }
         provider.response = details.dump();
         if (title == "魔法学园") {
             auto invalid_content = details;
@@ -169,6 +190,10 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
             CHECK(package.player_roles.front().trait_count == 1);
             CHECK(package.player_roles.front().starting_gold == 12);
             CHECK(package.player_roles.front().starting_items.contains(storyforge::ItemId{"item.start.letter"}));
+            REQUIRE(package.calendar.has_value());
+            CHECK(package.calendar->start_date == "2026-09-01");
+            REQUIRE(package.agent_timeline.size() == 1);
+            CHECK(package.agent_timeline.front().plan == "到大厅准备研究日");
         }
         const auto sidecar = nlohmann::json::parse(
             std::get<storyforge::agent::WorldSeedDraft>(generated).world_spec_json);
@@ -286,7 +311,7 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
         auto repaired = storyforge::agent::generate_world_seed_from_map(
             map_for(title), title + "发生了谜案", repairing);
         REQUIRE(std::holds_alternative<storyforge::agent::WorldSeedDraft>(repaired));
-        CHECK(repairing.calls == 4);
+        CHECK(repairing.calls == 5);
         REQUIRE(package.chapters.front().scenes.size() == 3);
         CHECK(package.agent_npcs.size() == 2);
         CHECK(package.agent_objects.size() == 7);
@@ -412,6 +437,17 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
         REQUIRE(std::holds_alternative<storyforge::StoryState>(restored_after_use));
         CHECK(std::get<storyforge::StoryState>(restored_after_use) == state);
     }
+}
+
+TEST_CASE("author-required stats and tradeoffs cannot silently disappear") {
+    FixedProvider provider;
+    provider.response = R"({"requirements":{"attributes":["生命","暗能","侵蚀"],"tradeoffs":[{"cost":"暗能","consequence":"侵蚀"}]},"world_spec":{"attributes":[{"id":"life","name":"生命","initial":5,"min":0,"max":10},{"id":"dark","name":"暗能","initial":4,"min":0,"max":10}],"identities":[{"id":"student","name":"学生","description":"新生","modifiers":{}},{"id":"visitor","name":"访客","description":"来访者","modifiers":{}}],"actions":[{"id":"cast","name":"施术","description":"施术有代价","scene":"gate","requirements":[],"costs":{"dark":1},"gains":{"life":1},"once":false}]}})";
+    const auto result = storyforge::agent::generate_world_seed_from_map(
+        map_for("异能都市"), "必须包含生命、暗能、侵蚀，使用暗能会增加侵蚀。", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::WorldSeedError>(result));
+    CHECK(std::get<storyforge::agent::WorldSeedError>(result).message.find("侵蚀") !=
+          std::string::npos);
+    CHECK(provider.calls == 4);
 }
 
 TEST_CASE("world seed rejects incomplete model proposals") {

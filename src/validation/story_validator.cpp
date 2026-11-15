@@ -1,6 +1,7 @@
 #include "storyforge/validation/validation.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <deque>
 #include <map>
 #include <set>
@@ -386,6 +387,72 @@ ValidationReport validate_story_package(const StoryPackage& package) {
             value.duration_minutes > 240 || value.start_minute + value.duration_minutes > 10080)
             report.add_error("semantic.invalid_appointment", path,
                 "appointment needs a valid NPC, scene, title and a 1-10080 minute time window");
+    }
+
+    if (package.calendar) {
+        const auto& calendar = *package.calendar;
+        const auto& date = calendar.start_date;
+        bool valid_date = date.size() == 10 && date[4] == '-' && date[7] == '-';
+        if (valid_date)
+            for (std::size_t i = 0; i < date.size(); ++i)
+                if (i != 4 && i != 7 && (date[i] < '0' || date[i] > '9'))
+                    valid_date = false;
+        if (valid_date) {
+            const int year = std::stoi(date.substr(0, 4));
+            const unsigned month = static_cast<unsigned>(std::stoul(date.substr(5, 2)));
+            const unsigned day = static_cast<unsigned>(std::stoul(date.substr(8, 2)));
+            valid_date = std::chrono::year_month_day{std::chrono::year{year},
+                std::chrono::month{month}, std::chrono::day{day}}.ok();
+        }
+        if (!valid_date || calendar.start_hour > 23)
+            report.add_error("semantic.invalid_calendar", "/calendar",
+                "calendar needs a valid YYYY-MM-DD start_date and start_hour 0-23");
+        auto validate_periods = [&](const std::vector<CalendarPeriod>& periods, const char* kind) {
+            std::uint32_t previous_end = 0;
+            for (std::size_t i = 0; i < periods.size(); ++i) {
+                const auto& period = periods[i];
+                if (period.name.empty() || period.first_day > period.last_day ||
+                    period.last_day > 3650 || (i > 0 && period.first_day <= previous_end))
+                    report.add_error("semantic.invalid_calendar", "/calendar/" +
+                        std::string{kind} + "/" + std::to_string(i),
+                        "periods need ordered, nonoverlapping days within ten years");
+                previous_end = period.last_day;
+            }
+        };
+        validate_periods(calendar.terms, "terms");
+        validate_periods(calendar.holidays, "holidays");
+    }
+    std::set<std::string> declared_events;
+    const auto collect_events = [&](const std::vector<StoryEffect>& effects) {
+        for (const auto& effect : effects)
+            if (const auto* completed = std::get_if<CompleteEventEffect>(&effect.data))
+                declared_events.insert(completed->event.value());
+    };
+    for (const auto& action : package.agent_actions) collect_events(action.effects);
+    for (const auto& npc : package.agent_npcs)
+        for (const auto& rule : npc.dialogue_rules) collect_events(rule.effects);
+    for (const auto& rule : package.agent_item_rules) collect_events(rule.effects);
+    for (const auto& chapter : package.chapters)
+        for (const auto& scene : chapter.scenes)
+            for (const auto& node : scene.nodes)
+                for (const auto& choice : node.choices) collect_events(choice.effects);
+    std::set<std::string> timeline_ids;
+    for (std::size_t i = 0; i < package.agent_timeline.size(); ++i) {
+        const auto& beat = package.agent_timeline[i];
+        const auto path = "/agent_timeline/" + std::to_string(i);
+        require_unique(timeline_ids, beat.id.value(), path + "/id", "timeline event", report);
+        if (beat.at_minute > 3651ULL * 1440 || beat.plan.empty() ||
+            !npc_ids.contains(beat.npc.value()) || beat.min_relationship < -100 ||
+            beat.min_relationship > 100 || (beat.scene && !scene_ids.contains(beat.scene->value())))
+            report.add_error("semantic.invalid_timeline", path,
+                "timeline event needs a known NPC, optional known scene, bounded time and plan");
+        if (beat.source_event == beat.id)
+            report.add_error("semantic.invalid_timeline", path + "/source_event",
+                "event cannot require itself");
+        if (!beat.source_event.empty() &&
+            !declared_events.contains(beat.source_event.value()))
+            report.add_error("semantic.missing_reference", path + "/source_event",
+                "timeline source_event must be completed by an existing action");
     }
 
     std::set<std::string> object_ids;

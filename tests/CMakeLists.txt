@@ -7,6 +7,7 @@ add_executable(storyforge_tests
     provider_tests.cpp
     runtime_tests.cpp
     replay_tests.cpp
+    long_replay_tests.cpp
     save_tests.cpp
     temporal_rules_tests.cpp
     validator_tests.cpp

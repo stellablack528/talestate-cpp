@@ -115,8 +115,10 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
         auto text = save.dump(2);
         if (text.size() > max_story_save_bytes)
             return SaveError{SaveErrorCode::invalid_state, "存档内容超过 1 MiB，无法保存。"};
-        if (std::holds_alternative<SaveError>(deserialize_story_save(package, text)))
-            return SaveError{SaveErrorCode::invalid_state, "当前世界状态无效，未覆盖已有存档。"};
+        if (const auto checked = deserialize_story_save(package, text);
+            std::holds_alternative<SaveError>(checked))
+            return SaveError{SaveErrorCode::invalid_state,
+                "当前世界状态无效，未覆盖已有存档：" + std::get<SaveError>(checked).message};
         return text;
     } catch (const Json::exception&) {
         return SaveError{SaveErrorCode::invalid_state, "当前世界状态无法写入存档。"};
@@ -268,7 +270,7 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                      status != "corroborated" && status != "disputed" &&
                      status != "accepted" && status != "declined" && status != "withdrawn") ||
                     content.empty() || content.size() > 280 || !valid_id(source) ||
-                    (due > state.world_minute && due - state.world_minute > 10080)) return malformed();
+                    due > max_world_minute) return malformed();
                 const bool object_source = std::any_of(package.agent_objects.begin(), package.agent_objects.end(),
                     [&](const AgentObject& object) { return object.id == source; });
                 const bool npc_source = std::any_of(package.agent_npcs.begin(), package.agent_npcs.end(),
@@ -312,7 +314,7 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                 if (event.type == "created") {
                     if (!event.source.empty() || replayed.contains(event.fact_id) ||
                         (fact.due_minute && (fact.due_minute <= event.minute ||
-                         fact.due_minute - event.minute > 10080))) return malformed();
+                         fact.due_minute > max_world_minute))) return malformed();
                     replayed[event.fact_id] = "open";
                 } else {
                     const auto found = replayed.find(event.fact_id);

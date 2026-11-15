@@ -27,6 +27,10 @@ Json state_json(const StoryPackage& package, const StoryState& state) {
                 {"completed_events", Json::array()}, {"collected_objects", Json::array()},
                 {"dynamic_facts", Json::array()}, {"event_log", Json::array()},
                 {"event_log_count", state.event_log.size()}, {"player", nullptr}};
+    if (const auto moment = calendar_at(package, state.world_minute))
+        result["calendar"] = {{"date", moment->date}, {"term", moment->term},
+            {"school_day", moment->school_day}, {"hour", moment->hour},
+            {"minute", moment->minute}};
     if (state.player)
         result["player"] = {{"name", state.player->name}, {"role", state.player->role},
             {"background", state.player->background},
@@ -126,6 +130,7 @@ std::variant<std::vector<AgentActionRequest>, std::string> parse_plan(const std:
                 else if (type == "give") request.kind = AgentActionKind::give;
                 else if (type == "use") request.kind = AgentActionKind::use;
                 else if (type == "wait") request.kind = AgentActionKind::wait;
+                else if (type == "skip") request.kind = AgentActionKind::skip;
                 else if (type == "book") request.kind = AgentActionKind::book;
                 else if (type == "attend") request.kind = AgentActionKind::attend;
                 else if (type == "investigate") request.kind = AgentActionKind::investigate;
@@ -208,6 +213,7 @@ Json requests_json(const std::vector<AgentActionRequest>& requests) {
                            request.kind == AgentActionKind::give ? "give" :
                            request.kind == AgentActionKind::use ? "use" :
                            request.kind == AgentActionKind::wait ? "wait" :
+                           request.kind == AgentActionKind::skip ? "skip" :
                            request.kind == AgentActionKind::book ? "book" :
                            request.kind == AgentActionKind::attend ? "attend" :
                            request.kind == AgentActionKind::investigate ? "investigate" :
@@ -254,7 +260,8 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
     if (node->terminal) return AgentFailure{"这个故事已经结束。"};
     if (package.agent_actions.empty() && package.agent_routes.empty() &&
         package.agent_npcs.empty() && package.agent_objects.empty() &&
-        package.agent_item_rules.empty() && package.agent_appointments.empty())
+        package.agent_item_rules.empty() && package.agent_appointments.empty() &&
+        package.agent_timeline.empty())
         return AgentFailure{"这个世界包尚未定义 Agent 行动规则。"};
 
     Json routes = Json::array();
@@ -268,13 +275,21 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
         Json topics = Json::array();
         for (const auto& rule : npc.dialogue_rules)
             topics.push_back({{"id", rule.id}, {"description", rule.description},
-                              {"currently_available", npc.scene == state.position.scene &&
+                              {"currently_available", npc_current_scene(npc, state) == state.position.scene &&
                                 std::all_of(rule.conditions.begin(), rule.conditions.end(),
                                     [&](const StoryCondition& condition) {
                                         return evaluate_condition(condition, state);
                                     })}});
+        std::string current_plan;
+        if (const auto memory = state.npc_memory.find(npc.id);
+            memory != state.npc_memory.end())
+            if (const auto plan = memory->second.find("current_plan");
+                plan != memory->second.end())
+                if (const auto* text = std::get_if<std::string>(&plan->second))
+                    current_plan = *text;
         npcs.push_back({{"id", npc.id.value()}, {"name", npc.name},
-                        {"scene", npc.scene.value()}, {"dialogue_topics", std::move(topics)}});
+                        {"scene", npc_current_scene(npc, state).value()},
+                        {"plan", current_plan}, {"dialogue_topics", std::move(topics)}});
     }
 
     Json objects = Json::array();
@@ -289,7 +304,7 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
         if (rule.kind == AgentActionKind::give)
             target_here = std::any_of(package.agent_npcs.begin(), package.agent_npcs.end(),
                 [&](const AgentNpc& npc) { return npc.id.value() == rule.target &&
-                                                 npc.scene == state.position.scene; });
+                                                 npc_current_scene(npc, state) == state.position.scene; });
         else
             target_here = std::any_of(package.agent_objects.begin(), package.agent_objects.end(),
                 [&](const AgentObject& object) { return object.id == rule.target &&
@@ -338,6 +353,7 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
              "{\"type\":\"give\",\"target\":\"npc.id\",\"item\":\"item.id\"},"
              "{\"type\":\"use\",\"target\":\"object.id\",\"item\":\"item.id\"},"
              "{\"type\":\"wait\",\"target\":\"minutes 1-240\"},"
+             "{\"type\":\"skip\",\"target\":\"next\"},"
              "{\"type\":\"book\",\"target\":\"appointment.id\"},"
              "{\"type\":\"attend\",\"target\":\"appointment.id\"},"
              "{\"type\":\"investigate\",\"target\":\"object.id\",\"id\":\"fact.unique-id\",\"topic\":\"short unverified lead\"},"
@@ -368,8 +384,10 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
              "them from the scene. Never invent an object's description. "
              "Give and use only exact item/target pairs in item_rules. Give transfers one item "
              "to a present NPC; use applies only the author's declared effects. "
-             "World time is measured in minutes from the opening. Wait only when the player "
-             "asks to pass time. Book a listed appointment with its NPC present; attend only "
+             "World time is measured in minutes from the opening; calendar fields are authoritative. "
+             "Wait or skip only when the player asks to pass time. Skip jumps to the next scheduled "
+             "world event or commitment, never inventing a major player choice. "
+             "Book a listed appointment with its NPC present; attend only "
              "at its scene and time. Never claim an unbooked or missed promise was fulfilled. "
              "New fact ids start with fact. and are unique. Leads are unverified, help requests "
              "are requests rather than accepted help, and planned events require a present NPC. "
@@ -420,11 +438,46 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
         for (const auto& event : delta.events)
             facts["events"].push_back({{"type", event.type}, {"text", event.text}});
         for (const auto& npc : package.agent_npcs)
-            if (npc.scene == delta.after.position.scene)
+            if (npc_current_scene(npc, delta.after) == delta.after.position.scene)
                 facts["npcs_in_current_scene"].push_back({{"id", npc.id.value()}, {"name", npc.name}});
         facts["authorized_actions"] = requests_json(actions);
         if (actions.empty()) {
-            const auto narration = "这次行动没有得到世界规则确认，因此没有改变地点、人物关系、物品或事件。你可以换一种具体行动继续尝试。";
+            std::string narration = correction.empty() ?
+                "这次行动没有可执行的世界规则。" : "这次行动受阻：" + correction + "。";
+            narration += "世界状态没有改变。";
+            std::vector<std::string> suggestions;
+            for (const auto& action : package.agent_actions) {
+                const StoryChoice choice{action.id, action.text, action.conditions,
+                                         action.effects, action.target_node};
+                if (choice_is_available(choice, state)) {
+                    suggestions.push_back(action.text);
+                    if (suggestions.size() == 2) break;
+                }
+            }
+            if (suggestions.empty()) {
+                for (const auto& object : package.agent_objects)
+                    if (object.scene == state.position.scene &&
+                        !state.collected_objects.contains(object.id)) {
+                        suggestions.push_back("观察" + object.name);
+                        break;
+                    }
+            }
+            if (suggestions.empty()) {
+                for (const auto& route : package.agent_routes)
+                    if (route.from == state.position.scene &&
+                        std::all_of(route.conditions.begin(), route.conditions.end(),
+                            [&](const StoryCondition& condition) {
+                                return evaluate_condition(condition, state);
+                            })) {
+                        suggestions.push_back("前往" + route.to.value());
+                        break;
+                    }
+            }
+            if (!suggestions.empty()) {
+                narration += "你现在可以尝试：" + suggestions.front();
+                if (suggestions.size() > 1) narration += "；或" + suggestions[1];
+                narration += "。";
+            }
             recent_turns_.push_back("Player: " + player_input + " | Committed: none");
             if (recent_turns_.size() > 6) recent_turns_.erase(recent_turns_.begin());
             return AgentTurn{std::move(delta), actions, narration, true};
@@ -475,7 +528,16 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
         if (recent_turns_.size() > 6) recent_turns_.erase(recent_turns_.begin());
         return AgentTurn{std::move(delta), actions, std::move(narration), fallback};
     }
-    return AgentFailure{"模型连续三次提出无效行动；本回合未修改世界。可换一种说法再试。最后原因：" + correction};
+    std::string message = "模型连续三次提出无效行动；本回合未修改世界。最后原因：" + correction;
+    for (const auto& action : package.agent_actions) {
+        const StoryChoice choice{action.id, action.text, action.conditions,
+                                 action.effects, action.target_node};
+        if (choice_is_available(choice, state)) {
+            message += "。你可以尝试：" + action.text;
+            break;
+        }
+    }
+    return AgentFailure{std::move(message)};
 }
 
 } // namespace storyforge::agent

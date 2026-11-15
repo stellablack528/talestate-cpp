@@ -159,11 +159,19 @@ QString state_summary(const storyforge::StoryPackage& package,
                 (here ? " · 当前" : adjacent ? " · 可前往" : " · 未连通") + "\n";
         }
     result += "\n";
-    result += "回合 " + QString::number(state.turn) + "　世界时间 第 " +
-        QString::number(state.world_minute / 1440 + 1) + " 天 " +
-        QString("%1:%2").arg((state.world_minute % 1440) / 60, 2, 10, QLatin1Char('0'))
-                         .arg(state.world_minute % 60, 2, 10, QLatin1Char('0')) +
-        "　金币 " + QString::number(state.gold) + "\n\n";
+    result += "回合 " + QString::number(state.turn) + "　世界时间 ";
+    if (const auto moment = storyforge::calendar_at(package, state.world_minute)) {
+        result += QString::fromStdString(moment->date) + " " +
+            QString("%1:%2").arg(moment->hour, 2, 10, QLatin1Char('0'))
+                              .arg(moment->minute, 2, 10, QLatin1Char('0')) +
+            (moment->term.empty() ? "" : " · " + QString::fromStdString(moment->term)) +
+            (moment->school_day ? " · 上课日" : " · 休息日");
+    } else {
+        result += "第 " + QString::number(state.world_minute / 1440 + 1) + " 天 " +
+            QString("%1:%2").arg((state.world_minute % 1440) / 60, 2, 10, QLatin1Char('0'))
+                             .arg(state.world_minute % 60, 2, 10, QLatin1Char('0'));
+    }
+    result += "　金币 " + QString::number(state.gold) + "\n\n";
     if (!package.agent_appointments.empty()) {
         result += "约定\n";
         for (const auto& appointment : package.agent_appointments) {
@@ -438,10 +446,16 @@ public:
         action_input_->setFixedHeight(90);
         send_button_ = new QPushButton("推进故事 →");
         send_button_->setObjectName("sendStoryButton");
+        skip_button_ = new QPushButton("跳到下一关键时刻");
         input_layout->addWidget(action_input_);
-        input_layout->addWidget(send_button_, 0, Qt::AlignRight);
+        auto* action_buttons = new QHBoxLayout;
+        action_buttons->addWidget(skip_button_);
+        action_buttons->addStretch();
+        action_buttons->addWidget(send_button_);
+        input_layout->addLayout(action_buttons);
         right_layout->addWidget(input_group);
         connect(send_button_, &QPushButton::clicked, this, [this] { send_turn(); });
+        connect(skip_button_, &QPushButton::clicked, this, [this] { skip_to_next_event(); });
         splitter->setSizes({400, 720});
     }
 
@@ -506,6 +520,7 @@ private:
     void set_busy(bool busy, bool checking_connection = false) {
         busy_ = busy;
         send_button_->setEnabled(!busy);
+        skip_button_->setEnabled(!busy);
         import_button_->setEnabled(!busy);
         character_button_->setEnabled(!busy);
         world_map_button_->setEnabled(!busy);
@@ -1081,6 +1096,30 @@ private:
         worker_->start();
     }
 
+    void skip_to_next_event() {
+        if (busy_ || !package_) return;
+        if (!state_.player) {
+            QMessageBox::information(this, "先创建角色", "请先创建角色，再推进时间。");
+            return;
+        }
+        storyforge::AgentActionRequest skip;
+        skip.kind = storyforge::AgentActionKind::skip;
+        skip.target = "next";
+        const auto result = storyforge::execute_agent_requests(*package_, state_, {skip});
+        if (const auto* failure = std::get_if<storyforge::RuntimeError>(&result)) {
+            append_story("系统", failure->message);
+            return;
+        }
+        const auto& delta = std::get<storyforge::StoryDelta>(result);
+        std::string summary;
+        for (const auto& event : delta.events) {
+            if (!summary.empty()) summary += "\n";
+            summary += event.text;
+        }
+        append_story("时间", summary);
+        state_view_->setPlainText(state_summary(*package_, state_));
+    }
+
     std::optional<storyforge::StoryPackage> package_;
     storyforge::StoryState state_;
     std::shared_ptr<storyforge::agent::StoryAgent> agent_;
@@ -1099,6 +1138,7 @@ private:
     QPushButton* save_button_{};
     QPushButton* continue_button_{};
     QPushButton* send_button_{};
+    QPushButton* skip_button_{};
     QPushButton* test_connection_button_{};
     QComboBox* provider_type_{};
     QLabel* test_connection_status_{};
