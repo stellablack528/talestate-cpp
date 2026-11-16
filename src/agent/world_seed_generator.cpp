@@ -555,7 +555,7 @@ WorldSeedResult generate_world_seed_from_map(const WorldMapDraft& map,
     requirement_request.max_output_tokens = 1024;
     requirement_request.messages = {{MessageRole::system,
         "WORLD_REQUIREMENTS_V1. Extract only explicitly required player numeric stats "
-        "and mandatory resource tradeoffs from the author's setting. Return exactly "
+        "and mandatory resource tradeoffs from the author's setting. Return exactly one JSON object: "
         "{\"attributes\":[\"display name\"],\"tradeoffs\":[{\"cost\":\"stat display name\","
         "\"consequence\":\"stat display name\"}]}. A tradeoff means one action spends "
         "the cost stat and increases the consequence stat. Never infer genre defaults. "
@@ -639,7 +639,7 @@ WorldSeedResult generate_world_seed_from_map(const WorldMapDraft& map,
     content_request.max_output_tokens = 6144;
     content_request.messages = {{MessageRole::system,
         "WORLD_CONTENT_V0. Create the opening and tangible discoverable objects for a "
-        "playable text RPG. Return only {goal:string,opening:string,"
+        "playable text RPG. Return only one JSON object {goal:string,opening:string,"
         "clues:[{id,name,scene,description}],"
         "interaction:{id,scene,target_name,target_description,clue_id,result},"
         "character:{mode,fixed_name,editable_fields,traits,trait_count,starting_gold,"
@@ -692,7 +692,7 @@ WorldSeedResult generate_world_seed_from_map(const WorldMapDraft& map,
     npc_request.response_format = ResponseFormat::json_object;
     npc_request.max_output_tokens = 6144;
     npc_request.messages = {{MessageRole::system,
-        "WORLD_NPCS_V0. Return only {npcs:[{id,name,scene,topic,reply,"
+        "WORLD_NPCS_V0. Return only one JSON object {npcs:[{id,name,scene,topic,reply,"
         "initial_relationship,clue_id,evidence_topic,evidence_reply,second_clue_id,"
         "combined_topic,combined_reply,event_topic,event_reply}],"
         "appointments:[{id,title,npc,scene,start_minute,duration_minutes}],"

@@ -1,0 +1,7 @@
+#pragma once
+
+#include <string_view>
+
+namespace storyforge::agent {
+inline constexpr std::string_view agent_turn_contract_v1 = R"TALESTATE(@STORYFORGE_AGENT_CONTRACT@)TALESTATE";
+}

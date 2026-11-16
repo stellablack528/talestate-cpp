@@ -1,4 +1,5 @@
 #include "storyforge/agent/story_agent.hpp"
+#include "agent_turn_contract.hpp"
 
 #include <algorithm>
 #include <set>
@@ -345,6 +346,7 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
         plan_request.max_output_tokens = 2048;
         plan_request.messages = {
             {MessageRole::system,
+             std::string(agent_turn_contract_v1) + "\n\n" +
              "You are the planner for a constrained text RPG. Return ONLY a JSON object "
              "{\"actions\":[{\"type\":\"move\",\"target\":\"scene.id\"},"
              "{\"type\":\"talk\",\"target\":\"npc.id\",\"topic\":\"short topic\"},"
@@ -486,13 +488,16 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
         narration_request.max_output_tokens = 700;
         narration_request.messages = {
             {MessageRole::system,
+             std::string(agent_turn_contract_v1) + "\n\n" +
              "Write one concise second-person text RPG paragraph in the same language as "
              "player_input. Narrate only the player action and committed events. The after-state "
              "is the sole authority. Use the exact world_minute if mentioning time; never invent "
              "an elapsed duration. Only NPCs in npcs_in_current_scene may appear. Do not invent "
-             "NPC speech, decisions or reactions: direct speech is allowed only when an "
-             "npc_dialogue event supplies the exact approved reply. Do not infer relationship, "
-             "An npc_questioned event means the player asked; it does not confirm an answer. "
+             "NPC decisions or world-changing reactions. Direct speech from npc_dialogue "
+             "must use its exact approved reply. For npc_questioned, an NPC may give a brief "
+             "ordinary conversational reply in character, including uncertainty or an opinion; "
+             "do not state new confirmed facts, promises, rewards or relationship changes. "
+             "An npc_questioned event does not confirm an answer. Do not infer relationship, "
              "An npc_recalled event confirms only the exact saved fact and status. "
              "last_discussed_topic alone does not prove that the NPC answered. "
              "item, resource, promise, event or ending changes absent from committed events. "
@@ -523,8 +528,11 @@ AgentTurnResult StoryAgent::take_turn(const StoryPackage& package, StoryState& s
                 else if (event.type == "item_given" || event.type == "item_used")
                     narration += "\n\n[确认的互动] " + event.text;
         }
+        const bool ordinary_chat = std::any_of(delta.events.begin(), delta.events.end(),
+            [](const StoryEvent& event) { return event.type == "npc_questioned"; });
         recent_turns_.push_back("Player: " + player_input + " | Committed: " +
-                                fallback_narration(delta));
+                                fallback_narration(delta) +
+                                (ordinary_chat && !fallback ? " | Unverified conversation: " + narration : ""));
         if (recent_turns_.size() > 6) recent_turns_.erase(recent_turns_.begin());
         return AgentTurn{std::move(delta), actions, std::move(narration), fallback};
     }

@@ -135,6 +135,7 @@ TaleState 在模型与游戏世界之间提供同一套专用能力：
 | 🔄 跨平台 CI | GitHub Actions 在 Windows 与 Linux 上构建、测试并验证示例剧情包 |
 
 地图草案的设计来源与边界见 [世界观地图草案](docs/architecture/world-map-draft.md)。
+长期自由游玩的回合结算、NPC 日常对话、剧情触发与违法后果的分阶段设计见 [回合契约草案](docs/architecture/agent-turn-loop-v1.md)。[Agent 回合指令 v1](assets/prompts/agent-turn-v1.md) 在构建时编入模型请求；普通闲聊现可得到不改变权威事实的模型回应，重要话语候选与违法结算仍待实现。
 探索世界包当前的字段映射与阶段边界见 [最小探索世界包规格](docs/format/world-seed-v0.md)。
 
 ---

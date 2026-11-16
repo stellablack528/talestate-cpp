@@ -271,6 +271,25 @@ TEST_CASE("planner repairs fenced JSON without changing the world on malformed p
     CHECK(provider.requests[0].max_output_tokens == 2048);
 }
 
+TEST_CASE("ordinary NPC chat can answer without granting facts or relationship") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    FakeProvider provider;
+    provider.responses = {
+        reply(R"({"actions":[{"type":"talk","target":"npc.alan","topic":"今天海风怎么样"}]})"),
+        reply("阿澜拢了拢外衣：‘风有些凉，你刚到港口吗？’")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "和阿澜聊聊天气", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    CHECK(std::get<storyforge::agent::AgentTurn>(result).narration.find("风有些凉") != std::string::npos);
+    CHECK(state.npc_relationships.empty());
+    CHECK(state.dynamic_facts.empty());
+    CHECK(state.event_log.empty());
+    REQUIRE(provider.requests.size() == 2);
+    CHECK(provider.requests[0].messages.front().content.find("TaleState Agent 回合契约 v1") != std::string::npos);
+    CHECK(provider.requests[1].messages.front().content.find("ordinary conversational reply") != std::string::npos);
+}
+
 TEST_CASE("planner makes a final plain-text repair attempt after two malformed JSON replies") {
     auto package = example("harbor-lantern");
     auto state = storyforge::make_initial_state(package);

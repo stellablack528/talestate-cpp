@@ -632,8 +632,8 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
                  remembered_fact->second.kind != "lead"))
                 events.push_back({"npc_talked", "与 " + found->name + " 谈起：" + request.topic});
             else
-                events.push_back({"npc_questioned", "你向 " + found->name + " 询问了：" +
-                    request.topic + "；对方尚未给出可确认的回答。"});
+                events.push_back({"npc_questioned", "你与 " + found->name + " 谈起：" +
+                    request.topic + "；这段闲聊没有产生已确认的新事实。"});
         } else if (request.kind == AgentActionKind::inspect || request.kind == AgentActionKind::take) {
             if (!request.topic.empty())
                 return error(RuntimeErrorCode::invalid_effect, "观察和拿取不接受话题参数");

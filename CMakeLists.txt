@@ -34,6 +34,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json CLI11)
 
+set(STORYFORGE_AGENT_CONTRACT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/prompts/agent-turn-v1.md")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${STORYFORGE_AGENT_CONTRACT_FILE}")
+file(READ "${STORYFORGE_AGENT_CONTRACT_FILE}" STORYFORGE_AGENT_CONTRACT)
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(src/agent/agent_turn_contract.hpp.in
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/agent_turn_contract.hpp" @ONLY)
+
 add_library(storyforge
     src/agent/connection_check.cpp
     src/agent/openai_compatible_provider.cpp
@@ -53,6 +60,8 @@ target_include_directories(storyforge
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+    PRIVATE
+        "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
 target_link_libraries(storyforge PUBLIC nlohmann_json::nlohmann_json)
 

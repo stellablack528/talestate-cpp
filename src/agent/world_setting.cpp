@@ -157,7 +157,7 @@ WorldSettingResult prepare_world_setting(const std::string& document, ILlmProvid
         summary.response_format = ResponseFormat::json_object;
         summary.max_output_tokens = 4096;
         summary.messages = {{MessageRole::system,
-            "Return ONLY {brief:string}. Merge the previous brief and new world-setting "
+            "Return ONLY a JSON object {brief:string}. Merge the previous brief and new world-setting "
             "facts into at most 3500 UTF-8 bytes. Preserve fixed protagonist identity, "
             "identity choices, starting resources, numeric bounds, core rules, named places "
             "and genre. Mark rumors as uncertain. Prefer explicit requirements over flavor. "
