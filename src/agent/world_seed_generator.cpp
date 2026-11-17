@@ -117,6 +117,15 @@ std::string content_error(const Json& details, const std::vector<std::string>& c
     std::string goal, opening;
     if (!field(details, "goal", goal, 600)) return "/goal 需要 1–600 字节的开局目标";
     if (!field(details, "opening", opening, 1800)) return "/opening 需要 1–1800 字节的开场";
+    if (!details.contains("arc") || !details["arc"].is_array() ||
+        details["arc"].size() < 2 || details["arc"].size() > 4)
+        return "/arc 需要 2–4 个宽松剧情锚点";
+    {
+        for (const auto& beat : details["arc"])
+            if (!beat.is_string() || beat.get<std::string>().empty() ||
+                beat.get<std::string>().size() > 250)
+                return "/arc 锚点文字无效";
+    }
     if (details.contains("calendar")) {
         const auto& calendar = details["calendar"];
         std::string date;
@@ -490,6 +499,12 @@ WorldSeedResult build(const WorldMapDraft& map, const std::string& world_brief,
     Json identity_details{{"details", details}, {"spec", world_spec}};
     if (setting) for (std::size_t i = 0; i < setting->sections.size(); ++i)
         identity_details["lore"][std::to_string(i)] = setting->sections[i];
+    std::string arc_context;
+    if (details.contains("arc")) {
+        arc_context = "\n宽松剧情骨架（不是固定路线）：";
+        for (const auto& beat : details["arc"])
+            arc_context += "\n- " + beat.get<std::string>();
+    }
     Json package = {{"format", "storyforge.package/v1"},
         {"id", stable_world_id(world_brief, map, identity_details)},
         {"title", map.title}, {"version", "0.5.0"},
@@ -497,7 +512,7 @@ WorldSeedResult build(const WorldMapDraft& map, const std::string& world_brief,
                          {"scene", "scene." + map.start}, {"node", "node." + map.start}}},
         {"variables", spec.variables}, {"player_roles", player_roles},
         {"world_context", world_brief + "\n当前目标：" + goal +
-            "\n" + spec.summary},
+            "\n" + spec.summary + arc_context},
         {"agent_routes", routes}, {"agent_npcs", npcs}, {"agent_objects", objects},
         {"agent_item_rules", item_rules},
         {"agent_actions", spec.actions},
@@ -640,6 +655,7 @@ WorldSeedResult generate_world_seed_from_map(const WorldMapDraft& map,
     content_request.messages = {{MessageRole::system,
         "WORLD_CONTENT_V0. Create the opening and tangible discoverable objects for a "
         "playable text RPG. Return only one JSON object {goal:string,opening:string,"
+        "arc:[string,string,string],"
         "clues:[{id,name,scene,description}],"
         "interaction:{id,scene,target_name,target_description,clue_id,result},"
         "character:{mode,fixed_name,editable_fields,traits,trait_count,starting_gold,"
@@ -655,7 +671,9 @@ WorldSeedResult generate_world_seed_from_map(const WorldMapDraft& map,
         "a concrete goal without claiming objects are already owned. Create one environment "
         "target; using interaction.clue_id on it reveals a result. Its scene and clue_id "
         "must reference the supplied locations and objects. Do not force a mystery plot, "
-        "invent endings, or add numeric mechanics. For character, mode is fixed if the "
+        "invent endings, or add numeric mechanics. The arc has 2-4 broad pressures or "
+        "possible turning points, never fixed daily scenes or a mandatory route. Daily "
+        "events will be generated after rest or a new day from play history. For character, mode is fixed if the "
         "setting specifies a named protagonist, otherwise selectable. fixed_name is that "
         "protagonist's name or empty. editable_fields are 0-4 short labels for details "
         "the player supplies. traits are 0-6 meaningful choices and trait_count is how "

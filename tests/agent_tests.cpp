@@ -71,6 +71,45 @@ TEST_CASE("author-approved agent actions compose atomically across different wor
     CHECK(school_state.turn == 0);
 }
 
+TEST_CASE("agent plans tomorrow when player sleeps and engine commits a pending beat") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    FakeProvider provider;
+    provider.responses = {
+        reply(R"({"actions":[{"type":"sleep","target":"480"}]})"),
+        reply(R"({"beats":[{"scene":"scene.dock","npc":"npc.alan","offset_minutes":120,"description":"阿澜将在码头张贴新的潮汐消息"}]})"),
+        reply("你睡了一觉。明天的码头似乎会有新消息。")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "我睡到明早", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    CHECK(provider.requests.size() == 3);
+    CHECK(state.world_minute == 480);
+    REQUIRE(state.daily_beats.size() == 1);
+    CHECK(state.daily_beats.front().at_minute == 600);
+    CHECK_FALSE(state.daily_beats.front().occurred);
+}
+
+TEST_CASE("agent plans the new day when the player stays awake") {
+    auto package = example("harbor-lantern");
+    auto state = storyforge::make_initial_state(package);
+    for (int i = 0; i < 5; ++i)
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(storyforge::execute_agent_requests(
+            package, state, {{storyforge::AgentActionKind::wait, "240"}})));
+    FakeProvider provider;
+    provider.responses = {
+        reply(R"({"actions":[{"type":"wait","target":"240"}]})"),
+        reply(R"({"beats":[{"scene":"scene.dock","npc":"npc.alan","offset_minutes":120,"description":"阿澜将在码头核对新的潮汐消息"}]})"),
+        reply("你熬过一夜，码头开始了新的一天。")};
+    storyforge::agent::StoryAgent agent;
+    auto result = agent.take_turn(package, state, "我不睡，继续等到天亮", provider);
+    REQUIRE(std::holds_alternative<storyforge::agent::AgentTurn>(result));
+    CHECK(provider.requests.size() == 3);
+    CHECK(state.world_minute == 1440);
+    CHECK(state.fatigue > 0);
+    REQUIRE(state.daily_beats.size() == 1);
+    CHECK(state.daily_beats.front().at_minute == 1560);
+}
+
 TEST_CASE("the same parameterized move and talk protocol works in both worlds") {
     struct Scenario {
         std::string world, local_npc, remote_npc, prerequisite, destination;

@@ -76,6 +76,8 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
         {"npc_memory", Json::object()}, {"npc_relationships", Json::object()},
         {"completed_events", Json::array()}, {"collected_objects", Json::array()},
         {"world_minute", state.world_minute}, {"appointments", Json::object()},
+        {"awake_minutes", state.awake_minutes}, {"fatigue", state.fatigue},
+        {"health", state.health}, {"ill", state.ill}, {"daily_beats", Json::array()},
         {"dynamic_facts", Json::object()}, {"event_log", Json::array()},
         {"player", nullptr}};
     if (state.player) {
@@ -107,6 +109,11 @@ SaveTextResult serialize_story_save(const StoryPackage& package, const StoryStat
     for (const auto& event : state.event_log)
         saved_state["event_log"].push_back({{"type", event.type}, {"fact_id", event.fact_id},
             {"turn", event.turn}, {"minute", event.minute}, {"source", event.source}});
+    for (const auto& beat : state.daily_beats)
+        saved_state["daily_beats"].push_back({{"id", beat.id}, {"scene", beat.scene.value()},
+            {"npc", beat.npc ? Json(beat.npc->value()) : Json(nullptr)},
+            {"at_minute", beat.at_minute}, {"description", beat.description},
+            {"occurred", beat.occurred}});
 
     const Json save{{"format", "talestate.save/v1"},
                     {"world", {{"id", package.id.value()}, {"version", package.version}}},
@@ -140,7 +147,11 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
                              "存档与当前世界包的 ID 或版本不一致，请导入原来的世界包。当前进度未改变。"};
 
         const auto& raw = save["state"];
-        const bool player_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+        const bool vitality_format = has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
+                              "npc_memory", "npc_relationships", "completed_events", "collected_objects",
+                              "world_minute", "appointments", "dynamic_facts", "event_log", "player",
+                              "awake_minutes", "fatigue", "health", "ill", "daily_beats"});
+        const bool player_format = vitality_format || has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
                               "npc_memory", "npc_relationships", "completed_events", "collected_objects",
                               "world_minute", "appointments", "dynamic_facts", "event_log", "player"});
         const bool dynamic_format = player_format || has_fields(raw, {"position", "turn", "gold", "variables", "inventory",
@@ -220,6 +231,49 @@ LoadStateResult deserialize_story_save(const StoryPackage& package, std::string_
             if (!raw["world_minute"].is_number_unsigned() || !raw["appointments"].is_object())
                 return malformed();
             state.world_minute = raw["world_minute"].get<std::uint64_t>();
+            if (vitality_format) {
+                const auto fatigue = integer(raw["fatigue"]);
+                const auto health = integer(raw["health"]);
+                if (!raw["awake_minutes"].is_number_unsigned() ||
+                    raw["awake_minutes"].get<std::uint64_t>() > max_world_minute ||
+                    !fatigue || *fatigue < 0 || *fatigue > 100 ||
+                    !health || *health < 0 || *health > 100 || !raw["ill"].is_boolean() ||
+                    raw["ill"].get<bool>() != (*fatigue >= 60) ||
+                    !raw["daily_beats"].is_array() || raw["daily_beats"].size() > 3)
+                    return malformed();
+                state.awake_minutes = raw["awake_minutes"].get<std::uint64_t>();
+                state.fatigue = *fatigue;
+                state.health = *health;
+                state.ill = raw["ill"].get<bool>();
+                std::set<std::string> beat_ids;
+                for (const auto& beat : raw["daily_beats"]) {
+                    if (!has_fields(beat, {"id", "scene", "npc", "at_minute", "description", "occurred"}) ||
+                        !beat["id"].is_string() || !beat["scene"].is_string() ||
+                        !beat["at_minute"].is_number_unsigned() || !beat["description"].is_string() ||
+                        !beat["occurred"].is_boolean() ||
+                        (!beat["npc"].is_null() && !beat["npc"].is_string())) return malformed();
+                    const auto id = beat["id"].get<std::string>();
+                    const auto scene_id = beat["scene"].get<std::string>();
+                    const auto minute = beat["at_minute"].get<std::uint64_t>();
+                    const auto description = beat["description"].get<std::string>();
+                    if (!valid_id(id) || !beat_ids.insert(id).second ||
+                        description.empty() || description.size() > 500 || minute > max_world_minute ||
+                        beat["occurred"].get<bool>() != (minute <= state.world_minute)) return malformed();
+                    const bool known_scene = std::any_of(package.chapters.begin(), package.chapters.end(),
+                        [&](const StoryChapter& chapter) { return std::any_of(chapter.scenes.begin(), chapter.scenes.end(),
+                            [&](const StoryScene& scene) { return scene.id.value() == scene_id; }); });
+                    if (!known_scene) return malformed();
+                    std::optional<NpcId> npc;
+                    if (beat["npc"].is_string()) {
+                        const auto npc_id = beat["npc"].get<std::string>();
+                        if (std::none_of(package.agent_npcs.begin(), package.agent_npcs.end(),
+                            [&](const AgentNpc& known) { return known.id.value() == npc_id; })) return malformed();
+                        npc = NpcId{npc_id};
+                    }
+                    state.daily_beats.push_back({id, SceneId{scene_id}, npc, minute, description,
+                        beat["occurred"].get<bool>()});
+                }
+            }
             for (const auto& [id, value] : raw["appointments"].items()) {
                 if (!valid_id(id) || !value.is_string()) return malformed();
                 const auto appointment = std::find_if(package.agent_appointments.begin(),

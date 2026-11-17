@@ -171,7 +171,13 @@ QString state_summary(const storyforge::StoryPackage& package,
             QString("%1:%2").arg((state.world_minute % 1440) / 60, 2, 10, QLatin1Char('0'))
                              .arg(state.world_minute % 60, 2, 10, QLatin1Char('0'));
     }
-    result += "　金币 " + QString::number(state.gold) + "\n\n";
+    result += "　金币 " + QString::number(state.gold) + "\n";
+    result += "生命 " + QString::number(state.health) + "/100　疲劳 " +
+        QString::number(state.fatigue) + "/100" + (state.ill ? " · 生病" : "") + "\n";
+    const auto pending_beats = std::count_if(state.daily_beats.begin(), state.daily_beats.end(),
+        [](const storyforge::DailyBeat& beat) { return !beat.occurred; });
+    if (pending_beats) result += "今后可能发生的动态 " + QString::number(pending_beats) + " 件\n";
+    result += "\n";
     if (!package.agent_appointments.empty()) {
         result += "约定\n";
         for (const auto& appointment : package.agent_appointments) {

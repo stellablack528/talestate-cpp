@@ -161,6 +161,8 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
                 {"plan", "到大厅准备研究日"}, {"at_minute", 2880},
                 {"min_relationship", -100}, {"source_action", ""}}});
         }
+        details["arc"] = nlohmann::json::array({"人物之间出现相互矛盾的请求",
+            "玩家选择会改变他们之后的合作方式"});
         provider.response = details.dump();
         if (title == "魔法学园") {
             auto invalid_content = details;
@@ -183,6 +185,7 @@ TEST_CASE("two world briefs generate loadable three-scene exploration seeds") {
         CHECK(package.world_lore.at("facts").front() == "塔楼可进入");
         CHECK(package.world_lore.at("secrets").front() == "守门人藏着另一把钥匙");
         CHECK(package.world_context.find("守门人藏着另一把钥匙") == std::string::npos);
+        CHECK(package.world_context.find("人物之间出现相互矛盾的请求") != std::string::npos);
         if (title == "魔法学园") {
             CHECK(provider.saw_content_repair);
             REQUIRE(package.player_roles.size() == 1);

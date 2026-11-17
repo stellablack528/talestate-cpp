@@ -453,3 +453,74 @@ TEST_CASE("concrete promises survive saves and NPCs recall only committed conten
         CHECK(std::get<storyforge::StoryDelta>(question).events.front().type == "npc_questioned");
     }
 }
+
+TEST_CASE("sleep plans a sourced next-day event and fatigue survives save and time jumps") {
+    auto package = world("rest-cycle");
+    auto state = storyforge::make_initial_state(package);
+    for (int i = 0; i < 7; ++i) {
+        const auto advanced = storyforge::execute_agent_requests(package, state,
+            {{storyforge::AgentActionKind::wait, "240"}});
+        REQUIRE(std::holds_alternative<storyforge::StoryDelta>(advanced));
+    }
+    CHECK(state.world_minute == 1680);
+    CHECK(state.fatigue >= 60);
+    CHECK(state.ill);
+    CHECK(state.health < 100);
+
+    storyforge::AgentActionRequest sleep{storyforge::AgentActionKind::sleep, "480"};
+    sleep.daily_beats.push_back({"day.8.1", storyforge::SceneId{"scene.hall"},
+        storyforge::NpcId{"npc.host"}, state.world_minute + 600,
+        "主持人将在大厅发布新的活动消息", false});
+    const auto slept = storyforge::execute_agent_requests(package, state, {sleep});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(slept));
+    CHECK(state.world_minute == 2160);
+    CHECK(state.fatigue < 60);
+    CHECK_FALSE(state.ill);
+    REQUIRE(state.daily_beats.size() == 1);
+    CHECK_FALSE(state.daily_beats.front().occurred);
+
+    const auto saved = storyforge::serialize_story_save(package, state);
+    REQUIRE(std::holds_alternative<std::string>(saved));
+    const auto loaded = storyforge::deserialize_story_save(package, std::get<std::string>(saved));
+    REQUIRE(std::holds_alternative<storyforge::StoryState>(loaded));
+    auto resumed = std::get<storyforge::StoryState>(loaded);
+    CHECK(resumed == state);
+
+    const auto reached = storyforge::execute_agent_requests(package, resumed,
+        {{storyforge::AgentActionKind::wait, "120"}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(reached));
+    CHECK(resumed.daily_beats.front().occurred);
+    CHECK(std::count_if(std::get<storyforge::StoryDelta>(reached).events.begin(),
+        std::get<storyforge::StoryDelta>(reached).events.end(),
+        [](const storyforge::StoryEvent& event) { return event.type == "daily_beat"; }) == 1);
+    const auto later = storyforge::execute_agent_requests(package, resumed,
+        {{storyforge::AgentActionKind::wait, "60"}});
+    REQUIRE(std::holds_alternative<storyforge::StoryDelta>(later));
+    CHECK(std::none_of(std::get<storyforge::StoryDelta>(later).events.begin(),
+        std::get<storyforge::StoryDelta>(later).events.end(),
+        [](const storyforge::StoryEvent& event) { return event.type == "daily_beat"; }));
+}
+
+TEST_CASE("invalid next-day references roll back sleep and vitals") {
+    auto package = world("invalid-day");
+    auto state = storyforge::make_initial_state(package);
+    const auto before = state;
+    storyforge::AgentActionRequest sleep{storyforge::AgentActionKind::sleep, "480"};
+    sleep.daily_beats.push_back({"day.1.1", storyforge::SceneId{"scene.hall"},
+        storyforge::NpcId{"npc.missing"}, 600, "虚构人物的事件", false});
+    CHECK(std::holds_alternative<storyforge::RuntimeError>(
+        storyforge::execute_agent_requests(package, state, {sleep})));
+    CHECK(state == before);
+}
+
+TEST_CASE("awake-day events require a real day boundary and preserve state on rejection") {
+    auto package = world("invalid-awake-day");
+    auto state = storyforge::make_initial_state(package);
+    const auto before = state;
+    storyforge::AgentActionRequest wait{storyforge::AgentActionKind::wait, "60"};
+    wait.daily_beats.push_back({"day.1.1", storyforge::SceneId{"scene.hall"},
+        storyforge::NpcId{"npc.host"}, 180, "主持人将在大厅公布消息", false});
+    CHECK(std::holds_alternative<storyforge::RuntimeError>(
+        storyforge::execute_agent_requests(package, state, {wait})));
+    CHECK(state == before);
+}

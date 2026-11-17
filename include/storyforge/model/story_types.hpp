@@ -161,7 +161,7 @@ struct AgentObject {
     std::optional<ItemId> item;
 };
 
-enum class AgentActionKind { authored, move, talk, inspect, take, give, use, wait, skip, book, attend,
+enum class AgentActionKind { authored, move, talk, inspect, take, give, use, wait, skip, sleep, book, attend,
     investigate, promise, fulfill, break_promise, ask_help, plan_event, attend_plan,
     corroborate, dispute, withdraw_help, respond_help };
 
@@ -209,6 +209,16 @@ struct AgentItemRule {
     std::vector<StoryEffect> effects;
 };
 
+struct DailyBeat {
+    std::string id;
+    SceneId scene;
+    std::optional<NpcId> npc;
+    std::uint64_t at_minute{0};
+    std::string description;
+    bool occurred{false};
+    bool operator==(const DailyBeat&) const = default;
+};
+
 struct AgentActionRequest {
     AgentActionKind kind{AgentActionKind::authored};
     std::string target;
@@ -217,6 +227,7 @@ struct AgentActionRequest {
     std::string id;
     std::uint64_t due_minute{0};
     std::string evidence;
+    std::vector<DailyBeat> daily_beats;
 };
 
 struct DynamicFact {
@@ -324,6 +335,11 @@ struct StoryState {
     std::set<std::string> collected_objects;
     std::uint64_t turn{0};
     std::uint64_t world_minute{0};
+    std::uint64_t awake_minutes{0};
+    std::int64_t fatigue{0};
+    std::int64_t health{100};
+    bool ill{false};
+    std::vector<DailyBeat> daily_beats;
     std::map<std::string, AppointmentStatus> appointments;
     std::map<std::string, DynamicFact> dynamic_facts;
     std::vector<DynamicEvent> event_log;

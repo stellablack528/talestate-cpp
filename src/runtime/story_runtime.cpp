@@ -109,6 +109,11 @@ void swap_story_state(StoryState& left, StoryState& right) noexcept {
     swap(left.collected_objects, right.collected_objects);
     swap(left.turn, right.turn);
     swap(left.world_minute, right.world_minute);
+    swap(left.awake_minutes, right.awake_minutes);
+    swap(left.fatigue, right.fatigue);
+    swap(left.health, right.health);
+    swap(left.ill, right.ill);
+    swap(left.daily_beats, right.daily_beats);
     swap(left.appointments, right.appointments);
     swap(left.dynamic_facts, right.dynamic_facts);
     swap(left.event_log, right.event_log);
@@ -369,8 +374,16 @@ bool timeline_ready(const AgentTimelineEvent& beat, const StoryState& state) {
     return score >= beat.min_relationship;
 }
 
+bool valid_daily_beat_id(const std::string& id) {
+    if (id.empty() || id.size() > 64 || id.front() < 'a' || id.front() > 'z') return false;
+    return std::all_of(id.begin(), id.end(), [](unsigned char ch) {
+        return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') ||
+            ch == '_' || ch == '.' || ch == '-';
+    });
+}
+
 void settle_time(const StoryPackage& package, StoryState& state, std::uint64_t target,
-                 std::vector<StoryEvent>& events) {
+                 std::vector<StoryEvent>& events, bool resting = false) {
     const auto start = state.world_minute;
     std::vector<std::uint64_t> milestones{target};
     for (const auto& appointment : package.agent_appointments) {
@@ -386,10 +399,36 @@ void settle_time(const StoryPackage& package, StoryState& state, std::uint64_t t
     for (const auto& beat : package.agent_timeline)
         if (beat.at_minute > start && beat.at_minute <= target)
             milestones.push_back(beat.at_minute);
+    for (const auto& beat : state.daily_beats)
+        if (!beat.occurred && beat.at_minute > start && beat.at_minute <= target)
+            milestones.push_back(beat.at_minute);
     std::sort(milestones.begin(), milestones.end());
     milestones.erase(std::unique(milestones.begin(), milestones.end()), milestones.end());
     for (const auto minute : milestones) {
+        if (!resting) {
+            const auto before = state.awake_minutes > 960 ? (state.awake_minutes - 960) / 60 : 0;
+            state.awake_minutes = std::min<std::uint64_t>(max_world_minute,
+                state.awake_minutes + minute - state.world_minute);
+            const auto after = state.awake_minutes > 960 ? (state.awake_minutes - 960) / 60 : 0;
+            if (after > before) {
+                state.fatigue = std::min<std::int64_t>(100,
+                    state.fatigue + static_cast<std::int64_t>(std::min<std::uint64_t>(20, after - before)) * 5);
+                events.push_back({"fatigue_changed", "疲劳值现为 " + std::to_string(state.fatigue)});
+                if (state.fatigue >= 60) {
+                    if (!state.ill) events.push_back({"became_ill", "过度疲劳使你生病了"});
+                    state.ill = true;
+                    state.health = std::max<std::int64_t>(0,
+                        state.health - static_cast<std::int64_t>(std::min<std::uint64_t>(20, after - before)));
+                    events.push_back({"health_changed", "生命值现为 " + std::to_string(state.health)});
+                }
+            }
+        }
         state.world_minute = minute;
+        for (auto& beat : state.daily_beats)
+            if (!beat.occurred && beat.at_minute == minute) {
+                beat.occurred = true;
+                events.push_back({"daily_beat", beat.description});
+            }
         for (const auto& appointment : package.agent_appointments) {
             auto status = state.appointments.find(appointment.id);
             if (status != state.appointments.end() && status->second == AppointmentStatus::booked &&
@@ -419,6 +458,12 @@ void settle_time(const StoryPackage& package, StoryState& state, std::uint64_t t
             state.completed_events.insert(beat.id);
             events.push_back({"npc_plan_changed", "人物计划更新：" + beat.plan});
         }
+    }
+    if (resting) {
+        state.awake_minutes = 0;
+        state.fatigue = std::max<std::int64_t>(0, state.fatigue - 40);
+        state.ill = state.fatigue >= 60;
+        events.push_back({"rested", "休息后疲劳值现为 " + std::to_string(state.fatigue)});
     }
 }
 
@@ -487,8 +532,14 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
     if (package.agent_actions.empty() && package.agent_routes.empty() &&
         package.agent_npcs.empty() && package.agent_objects.empty() &&
         package.agent_item_rules.empty() && package.agent_appointments.empty() &&
-        package.agent_timeline.empty())
+        package.agent_timeline.empty() &&
+        std::any_of(actions.begin(), actions.end(), [](const AgentActionRequest& action) {
+            return action.kind != AgentActionKind::sleep && action.kind != AgentActionKind::wait &&
+                action.kind != AgentActionKind::skip;
+        }))
         return error(RuntimeErrorCode::invalid_effect, "该世界未声明 Agent 行动规则");
+    if (state.health == 0)
+        return error(RuntimeErrorCode::story_finished, "生命耗尽，本局已经结束");
     if (actions.size() > 3)
         return error(RuntimeErrorCode::invalid_effect, "一回合最多执行三个行动");
     if (state.turn == std::numeric_limits<std::uint64_t>::max())
@@ -497,6 +548,7 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
     StoryState candidate = state;
     std::vector<StoryEvent> events;
     std::set<ChoiceId> seen;
+    std::uint64_t activity_minutes = 0;
     for (const auto& request : actions) {
         const auto* current = current_node(package, candidate);
         if (current == nullptr)
@@ -694,6 +746,37 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
             }
             events.push_back({request.kind == AgentActionKind::give ? "item_given" : "item_used",
                               rule->description});
+        } else if (request.kind == AgentActionKind::sleep) {
+            if (!request.topic.empty() || request.daily_beats.size() > 3)
+                return error(RuntimeErrorCode::invalid_effect, "睡眠最多规划三件次日事件");
+            std::uint64_t minutes{};
+            const auto [end, parse_error] = std::from_chars(
+                request.target.data(), request.target.data() + request.target.size(), minutes);
+            if (parse_error != std::errc{} || end != request.target.data() + request.target.size() ||
+                minutes < 240 || minutes > 720 || candidate.world_minute > max_world_minute - minutes)
+                return error(RuntimeErrorCode::invalid_effect, "睡眠时间须为 240–720 分钟");
+            settle_time(package, candidate, candidate.world_minute + minutes, events, true);
+            candidate.daily_beats.erase(std::remove_if(candidate.daily_beats.begin(),
+                candidate.daily_beats.end(), [](const DailyBeat& beat) { return beat.occurred; }),
+                candidate.daily_beats.end());
+            if (candidate.daily_beats.size() + request.daily_beats.size() > 3)
+                return error(RuntimeErrorCode::invalid_effect, "待发生的次日事件太多");
+            std::set<std::string> beat_ids;
+            for (const auto& beat : candidate.daily_beats) beat_ids.insert(beat.id);
+            for (const auto& beat : request.daily_beats) {
+                const auto* scene = find_scene_in_package(package, beat.scene).second;
+                const bool npc_known = !beat.npc || std::any_of(package.agent_npcs.begin(),
+                    package.agent_npcs.end(), [&](const AgentNpc& npc) { return npc.id == *beat.npc; });
+                if (!valid_daily_beat_id(beat.id) || !beat_ids.insert(beat.id).second ||
+                    scene == nullptr || !npc_known || beat.description.empty() ||
+                    beat.description.size() > 500 || beat.occurred ||
+                    beat.at_minute <= candidate.world_minute ||
+                    beat.at_minute > candidate.world_minute + 1440 ||
+                    beat.at_minute > max_world_minute)
+                    return error(RuntimeErrorCode::invalid_effect, "次日事件的来源、地点或时间无效");
+                candidate.daily_beats.push_back(beat);
+            }
+            events.push_back({"slept", "睡眠 " + std::to_string(minutes) + " 分钟，新的活动时段开始"});
         } else if (request.kind == AgentActionKind::wait ||
                    request.kind == AgentActionKind::skip) {
             if (!request.topic.empty())
@@ -933,10 +1016,47 @@ CommandResult execute_agent_requests(const StoryPackage& package, StoryState& st
         } else {
             return error(RuntimeErrorCode::invalid_effect, "未知的行动类型");
         }
+        if (candidate.player && request.kind != AgentActionKind::wait &&
+            request.kind != AgentActionKind::skip && request.kind != AgentActionKind::sleep)
+            activity_minutes += request.kind == AgentActionKind::move ? 30 : 10;
     }
     // A composed action sequence is one player turn, even though each capability
     // is evaluated against the candidate state left by the preceding one.
-    settle_time(package, candidate, candidate.world_minute, events);
+    if (activity_minutes && candidate.world_minute <= max_world_minute - activity_minutes)
+        settle_time(package, candidate, candidate.world_minute + activity_minutes, events);
+    else
+        settle_time(package, candidate, candidate.world_minute, events);
+    bool planned_awake_day = false;
+    for (const auto& request : actions) {
+        if (request.kind == AgentActionKind::sleep || request.daily_beats.empty()) continue;
+        const auto day_at = [&](std::uint64_t minute) {
+            const auto start_hour = package.calendar ? package.calendar->start_hour : 0U;
+            return (minute + static_cast<std::uint64_t>(start_hour) * 60U) / 1440U;
+        };
+        if (planned_awake_day || day_at(candidate.world_minute) <= day_at(state.world_minute) ||
+            request.daily_beats.size() > 2)
+            return error(RuntimeErrorCode::invalid_effect, "清醒跨日事件只能在进入新的一天时规划一次");
+        planned_awake_day = true;
+        candidate.daily_beats.erase(std::remove_if(candidate.daily_beats.begin(),
+            candidate.daily_beats.end(), [](const DailyBeat& beat) { return beat.occurred; }),
+            candidate.daily_beats.end());
+        if (candidate.daily_beats.size() + request.daily_beats.size() > 3)
+            return error(RuntimeErrorCode::invalid_effect, "待发生的次日事件太多");
+        std::set<std::string> ids;
+        for (const auto& beat : candidate.daily_beats) ids.insert(beat.id);
+        for (const auto& beat : request.daily_beats) {
+            const bool npc_known = !beat.npc || std::any_of(package.agent_npcs.begin(),
+                package.agent_npcs.end(), [&](const AgentNpc& npc) { return npc.id == *beat.npc; });
+            if (!valid_daily_beat_id(beat.id) || !ids.insert(beat.id).second ||
+                find_scene_in_package(package, beat.scene).second == nullptr || !npc_known ||
+                beat.description.empty() || beat.description.size() > 500 || beat.occurred ||
+                beat.at_minute <= candidate.world_minute ||
+                beat.at_minute > candidate.world_minute + 1440 || beat.at_minute > max_world_minute)
+                return error(RuntimeErrorCode::invalid_effect, "清醒跨日事件的来源、地点或时间无效");
+            candidate.daily_beats.push_back(beat);
+        }
+        events.push_back({"day_planned", "新的一天已有待发生的事件"});
+    }
     candidate.turn = state.turn + 1;
     StoryDelta delta{state, candidate, std::move(events)};
     swap_story_state(state, candidate);
@@ -948,7 +1068,7 @@ CommandResult execute_agent_actions(const StoryPackage& package, StoryState& sta
     std::vector<AgentActionRequest> requests;
     requests.reserve(actions.size());
     for (const auto& action : actions)
-        requests.push_back({AgentActionKind::authored, action.value(), {}, {}, {}, 0, {}});
+        requests.push_back({AgentActionKind::authored, action.value(), {}, {}, {}, 0, {}, {}});
     return execute_agent_requests(package, state, requests);
 }
 
