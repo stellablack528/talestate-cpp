@@ -1,0 +1,655 @@
+{
+  "format": "world-builder-draft/v1",
+  "sources": [
+    {
+      "id": "chapter",
+      "text": "霍格沃兹原创校园支章《缺刻之夜》：观象实习的集合铃提前响了一刻，学生差点在禁行时段出门。轮值学生可请艾琳签发具名纸质许可，亲手交给奥斯温登记后现场誊抄旧簿并对读纸转盘，也可征得诺拉本人同意，请她携自己的拓印参加艾琳晨间复核。两路都凭真实证据开启现场校准。手写支线《银叶书签》由奥斯温托玩家归还诺拉夹拓纸的银叶压片，实际交接完成，独立于主线。"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "main",
+      "source_ref": "chapter",
+      "text": "两条证据路线汇合，再于星塔完成校准",
+      "implemented_by": [
+        "quests/read_the_ring",
+        "quests/align_the_tower",
+        "actions/read_calibration_ledger",
+        "actions/ask_nora",
+        "night_opportunities/tutor_morning_review"
+      ]
+    },
+    {
+      "id": "side",
+      "source_ref": "chapter",
+      "text": "保留手写归还书签支线",
+      "implemented_by": [
+        "quests/return_bookmark",
+        "actions/collect_bookmark",
+        "actions/return_bookmark"
+      ]
+    },
+    {
+      "id": "permit",
+      "source_ref": "chapter",
+      "text": "誊抄许可须由艾琳同意后实际签发入背包，交由奥斯温登记才开放现场誊抄。主线完成后仍可体验。",
+      "implemented_by": [
+        "items/transcription_permit",
+        "actions/issue_transcription_permit",
+        "actions/register_transcription_permit",
+        "actions/read_calibration_ledger"
+      ]
+    }
+  ],
+  "definition": {
+    "format": "world-definition/v1",
+    "world_id": "star_academy",
+    "revision": 2,
+    "title": "霍格沃兹：缺刻之夜",
+    "description": "霍格沃兹的春季观象实习险些把学生召集到禁行时段。轮值学生要核对星塔铜环上的旧刻度，让下一次实习准时开始。",
+    "clock": {
+      "start_minute": 480,
+      "night_minute": 1200,
+      "conversation_minutes": 5,
+      "home": "dorm"
+    },
+    "map": {
+      "size_km": {
+        "width": 4,
+        "height": 3
+      },
+      "walking_speed_kmh": 4,
+      "routes": [
+        {
+          "from": "dorm",
+          "to": "court",
+          "distance_km": 1
+        },
+        {
+          "from": "court",
+          "to": "archive",
+          "distance_km": 1
+        },
+        {
+          "from": "court",
+          "to": "tower",
+          "distance_km": 1
+        }
+      ]
+    },
+    "locations": [
+      {
+        "id": "dorm",
+        "name": "宿舍",
+        "description": "寄宿生宿舍的窄窗正对观测星塔。床尾课表印着禁行时间，昨夜的观象实习集合铃偏偏早响了一刻。",
+        "position_km": [
+          1,
+          1
+        ],
+        "background": "dorm"
+      },
+      {
+        "id": "court",
+        "name": "庭院课堂",
+        "description": "石廊环绕着露天观象课堂。讲桌上摊着新版刻度印本，艾琳正在登记误响的集合铃。",
+        "position_km": [
+          2,
+          1
+        ],
+        "background": "court"
+      },
+      {
+        "id": "archive",
+        "name": "档案室",
+        "description": "校史档案室的旧观测册按届次排列。工作桌上有纸转盘和松装的校准簿，借出原件须登记。 誊抄旧校准簿须先交验导师签发的纸件。",
+        "position_km": [
+          2,
+          2
+        ],
+        "background": "archive",
+        "descriptions": [
+          {
+            "conditions": [
+              {
+                "op": "evidence",
+                "match": {
+                  "type": "delivered",
+                  "item": "transcription_permit",
+                  "from": "player",
+                  "to": "archivist",
+                  "action": "register_transcription_permit"
+                }
+              }
+            ],
+            "text": "奥斯温收下了已核验的许可。旧校准簿和纸转盘已摆在工作桌上，可以在档案室当场誊抄。"
+          }
+        ]
+      },
+      {
+        "id": "tower",
+        "name": "星塔",
+        "description": "观象实习使用的旧塔。塔门旁的铜环留着两套刻度，每到课表指定的时刻便触发集合铃。",
+        "position_km": [
+          3,
+          1
+        ],
+        "background": "tower",
+        "descriptions": [
+          {
+            "conditions": [
+              {
+                "op": "quest_status",
+                "quest": "align_the_tower",
+                "value": "completed"
+              }
+            ],
+            "text": "铜环已按旧缺刻校准。集合铃准时响起，庭院挂起本周的观象课旗，下一次实习照常举行。"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "id": "player",
+        "kind": "player",
+        "name": "新生",
+        "location": "dorm",
+        "attributes": {
+          "coins": 0
+        }
+      },
+      {
+        "id": "tutor",
+        "kind": "npc",
+        "name": "导师艾琳",
+        "location": "court",
+        "profile": "艾琳是霍格沃兹的观象实习导师。她把学生安全与可复查的记录放在自己声望之前。昨晚采用的新版印本是她亲自签字核对的，她想查清误差并公开留档。缺少原簿或亲手拓印时，她拒绝签结论，也不批准学生在禁行后上塔。 她可以为有合理课业需要、同意在档案室现场誊抄的学生签发具名纸质许可。 初次请学生帮忙查集合铃时，告诉对方两条路任选。想今天查，就先向我拿纸质许可，再去档案室交给奥斯温，在那里抄旧簿。愿意等到明天，就先在庭院问诺拉愿不愿带拓印来，约好后次日上午到庭院找我。没有约好，可以改去查旧簿。先把第一步说明白，等查到证据再谈错在哪里。",
+        "attributes": {},
+        "portrait": "tutor",
+        "memory_file": "npcs/tutor.json",
+        "voice": "严谨克制，通常一两句，只谈观察、判断与下一步。有证据改判时才解释。拒绝时说缺什么依据。"
+      },
+      {
+        "id": "student",
+        "kind": "npc",
+        "name": "同学诺拉",
+        "location": "court",
+        "profile": "诺拉是霍格沃兹寄宿生，喜欢亲手测量，希望自己的观测获得署名。她被同学取笑过，因而愿意在小范围复核，拒绝被催逼公开笔记、替别人担责或夜间违规。有人愿意先听她、尊重署名或出示可信依据时，她更愿意带拓印赴约。 有人问集合铃时，我会说明想走我这条路就先问我愿不愿带拓印来。如果我答应，也要等艾琳约好，次日上午到庭院找她。我自己决定是否同意。",
+        "attributes": {},
+        "portrait": "student",
+        "memory_file": "npcs/student.json",
+        "voice": "活泼、嘴快。有发现或兴奋时会多讲细节，闲聊轻快简短。拒绝用短句，不强迫玩家信任。"
+      },
+      {
+        "id": "archivist",
+        "kind": "npc",
+        "name": "档案官奥斯温",
+        "location": "archive",
+        "profile": "奥斯温管理霍格沃兹校史档案室。他看重原件的来历、登记与保存，想把旧仪器记录整理成可借副本。他拒绝借出未登记原件，也拒绝给自己没亲眼查过的结论签字。他从观测册里拾到诺拉用的银叶压片，希望私下归还。 他核验导师签发的纸质许可并留档，登记后允许持件人在档案室现场誊抄，原簿仍留在室内。 初次托人还书签时，我会直说：先在档案室向我拿书签，再去庭院亲手交给诺拉。有人要抄旧簿时，我会请他先到庭院找艾琳拿纸质许可，再回来把纸件交给我。",
+        "attributes": {},
+        "portrait": "archivist",
+        "memory_file": "npcs/archivist.json",
+        "voice": "冷淡守规，话少干脆。谈档案真伪、印记与借阅规矩才展开，讲清证据来自何处和能证明什么。"
+      }
+    ],
+    "items": [
+      {
+        "id": "silver_bookmark",
+        "name": "银叶书签",
+        "owner": "archivist",
+        "category": "quest",
+        "description": "曾被诺拉用来夹住拓纸的银叶压片，边缘留有一道细小的墨痕。"
+      },
+      {
+        "id": "transcription_permit",
+        "name": "艾琳签发的誊抄许可",
+        "owner": null,
+        "category": "quest",
+        "description": "艾琳署名的纸件，允许持件人在奥斯温登记后，于档案室当场誊抄星塔旧校准簿。原簿留在室内。"
+      }
+    ],
+    "actions": [
+      {
+        "id": "issue_transcription_permit",
+        "name": "向艾琳要一张抄旧簿的许可",
+        "intent": "request",
+        "actor": "player",
+        "target": "tutor",
+        "item": "transcription_permit",
+        "description": "在庭院课堂请艾琳签发纸质许可。她同意并签发后，才能拿到纸件。",
+        "duration_minutes": 5,
+        "ai_interaction": true,
+        "preconditions": [
+          {
+            "op": "at",
+            "entity": "player",
+            "location": "court"
+          },
+          {
+            "op": "at",
+            "entity": "tutor",
+            "location": "court"
+          },
+          {
+            "op": "item_unissued",
+            "item": "transcription_permit"
+          }
+        ],
+        "effects": [
+          {
+            "op": "npc_decision",
+            "npc": "tutor",
+            "decision": "approve_transcription"
+          },
+          {
+            "op": "issue_item",
+            "item": "transcription_permit",
+            "npc": "tutor"
+          }
+        ]
+      },
+      {
+        "id": "register_transcription_permit",
+        "name": "把纸质许可交给奥斯温",
+        "intent": "deliver",
+        "actor": "player",
+        "target": "archivist",
+        "item": "transcription_permit",
+        "description": "在档案室把艾琳签发的纸件交给奥斯温。奥斯温收下并登记后，你可以在这里抄旧簿。",
+        "duration_minutes": 5,
+        "ai_interaction": true,
+        "preconditions": [
+          {
+            "op": "at",
+            "entity": "player",
+            "location": "archive"
+          },
+          {
+            "op": "at",
+            "entity": "archivist",
+            "location": "archive"
+          },
+          {
+            "op": "owned_by",
+            "item": "transcription_permit",
+            "entity": "player"
+          }
+        ],
+        "effects": [
+          {
+            "op": "transfer",
+            "item": "transcription_permit",
+            "from": "player",
+            "to": "archivist"
+          }
+        ]
+      },
+      {
+        "id": "read_calibration_ledger",
+        "name": "在档案室抄旧簿",
+        "intent": "investigate",
+        "actor": "player",
+        "target": "archive",
+        "duration_minutes": 5,
+        "preconditions": [
+          {
+            "op": "at",
+            "entity": "player",
+            "location": "archive"
+          },
+          {
+            "op": "evidence",
+            "match": {
+              "type": "delivered",
+              "item": "transcription_permit",
+              "from": "player",
+              "to": "archivist",
+              "action": "register_transcription_permit"
+            }
+          }
+        ],
+        "effects": [
+          {
+            "op": "investigate",
+            "entity": "player",
+            "location": "archive",
+            "clue": "old_ring_alignment",
+            "title": "旧簿记载：铜环以朝北的缺刻为准。新版把装订线错当成了刻度。"
+          }
+        ],
+        "description": "许可已登记。在工作桌边抄下旧簿上的相关记录，再对照纸转盘找线索。"
+      },
+      {
+        "id": "ask_nora",
+        "name": "问诺拉愿不愿带拓印来",
+        "intent": "decide",
+        "actor": "player",
+        "target": "student",
+        "duration_minutes": 5,
+        "preconditions": [
+          {
+            "op": "at",
+            "entity": "player",
+            "location": "court"
+          },
+          {
+            "op": "at",
+            "entity": "student",
+            "location": "court"
+          },
+          {
+            "op": "quest_status",
+            "quest": "read_the_ring",
+            "value": "active"
+          }
+        ],
+        "effects": [
+          {
+            "op": "npc_decision",
+            "npc": "student",
+            "decision": "bring_ring_copy"
+          }
+        ],
+        "ai_interaction": true,
+        "description": "在庭院课堂问诺拉愿不愿带上自己的拓印，次日上午见艾琳。诺拉可以拒绝。"
+      },
+      {
+        "id": "align_tower_ring",
+        "name": "调整星塔的铜环",
+        "intent": "investigate",
+        "actor": "player",
+        "target": "tower",
+        "duration_minutes": 5,
+        "preconditions": [
+          {
+            "op": "at",
+            "entity": "player",
+            "location": "tower"
+          },
+          {
+            "op": "quest_status",
+            "quest": "align_the_tower",
+            "value": "active"
+          }
+        ],
+        "effects": [
+          {
+            "op": "investigate",
+            "entity": "player",
+            "location": "tower",
+            "clue": "tower_ring_aligned"
+          }
+        ],
+        "description": "按已经查到的线索，调整塔门旁的铜环，让集合铃准时响。"
+      },
+      {
+        "id": "collect_bookmark",
+        "name": "向奥斯温拿银叶书签",
+        "intent": "accept",
+        "actor": "player",
+        "target": "archivist",
+        "duration_minutes": 5,
+        "preconditions": [
+          {
+            "op": "at",
+            "entity": "player",
+            "location": "archive"
+          },
+          {
+            "op": "at",
+            "entity": "archivist",
+            "location": "archive"
+          },
+          {
+            "op": "quest_status",
+            "quest": "return_bookmark",
+            "value": "available"
+          },
+          {
+            "op": "owned_by",
+            "item": "silver_bookmark",
+            "entity": "archivist"
+          }
+        ],
+        "effects": [
+          {
+            "op": "transfer",
+            "item": "silver_bookmark",
+            "from": "archivist",
+            "to": "player"
+          },
+          {
+            "op": "activate_quest",
+            "quest": "return_bookmark"
+          }
+        ],
+        "item": "silver_bookmark",
+        "ai_interaction": true,
+        "description": "在档案室从奥斯温手里接过书签，再去庭院课堂找诺拉。"
+      },
+      {
+        "id": "return_bookmark",
+        "name": "把书签亲手还给诺拉",
+        "intent": "deliver",
+        "actor": "player",
+        "target": "student",
+        "duration_minutes": 5,
+        "preconditions": [
+          {
+            "op": "at",
+            "entity": "player",
+            "location": "court"
+          },
+          {
+            "op": "at",
+            "entity": "student",
+            "location": "court"
+          },
+          {
+            "op": "quest_status",
+            "quest": "return_bookmark",
+            "value": "active"
+          },
+          {
+            "op": "owned_by",
+            "item": "silver_bookmark",
+            "entity": "player"
+          }
+        ],
+        "effects": [
+          {
+            "op": "transfer",
+            "item": "silver_bookmark",
+            "from": "player",
+            "to": "student"
+          }
+        ],
+        "item": "silver_bookmark",
+        "ai_interaction": true,
+        "description": "在庭院课堂把银叶书签交给诺拉。"
+      }
+    ],
+    "quests": [
+      {
+        "id": "read_the_ring",
+        "title": "查集合铃：去庭院找艾琳或诺拉",
+        "initial_status": "active",
+        "giver": "tutor",
+        "description": "先去庭院课堂。下面两条路任选一条。\n想今天查：找艾琳拿纸质许可，再去档案室把许可交给奥斯温，在那里抄旧簿。\n愿意等到明天：问诺拉愿不愿带拓印来。约好后，次日上午到庭院找艾琳。如果没约上或错过了，可以改查旧簿。",
+        "complete_when": [
+          {
+            "type": "clue_found",
+            "clue": "old_ring_alignment",
+            "entity": "player",
+            "location": "archive",
+            "action": "read_calibration_ledger"
+          },
+          {
+            "type": "appointment_attended",
+            "npc": "tutor",
+            "location": "court",
+            "visit": "tutor_morning_review"
+          }
+        ],
+        "rewards": [
+          {
+            "op": "activate_quest",
+            "quest": "align_the_tower"
+          }
+        ]
+      },
+      {
+        "id": "align_the_tower",
+        "title": "去星塔把集合铃调准",
+        "initial_status": "available",
+        "hidden_until_active": true,
+        "giver": "tutor",
+        "description": "去星塔，按刚查到的线索调整塔门旁的铜环。到场就可以动手。",
+        "complete_when": {
+          "type": "clue_found",
+          "clue": "tower_ring_aligned",
+          "entity": "player",
+          "location": "tower",
+          "action": "align_tower_ring"
+        },
+        "rewards": []
+      },
+      {
+        "id": "return_bookmark",
+        "title": "把银叶书签交给庭院的诺拉",
+        "initial_status": "available",
+        "giver": "archivist",
+        "recipient": "student",
+        "description": "书签在奥斯温手里。先去档案室找他拿书签，再去庭院课堂亲手交给诺拉。已经拿到书签的话，直接去庭院。",
+        "complete_when": {
+          "type": "delivered",
+          "item": "silver_bookmark",
+          "from": "player",
+          "to": "student",
+          "action": "return_bookmark"
+        },
+        "rewards": []
+      }
+    ],
+    "night_opportunities": [
+      {
+        "id": "tutor_morning_review",
+        "npc": "tutor",
+        "location": "court",
+        "title": "艾琳的课前复核：核对诺拉的拓印",
+        "preconditions": [
+          {
+            "op": "quest_status",
+            "quest": "read_the_ring",
+            "value": "active"
+          },
+          {
+            "op": "evidence",
+            "match": {
+              "type": "npc_decided",
+              "npc": "student",
+              "decision": "bring_ring_copy"
+            }
+          },
+          {
+            "op": "at",
+            "entity": "student",
+            "location": "court"
+          }
+        ],
+        "minutes": 120
+      },
+      {
+        "id": "archivist_morning_demo",
+        "npc": "archivist",
+        "location": "archive",
+        "title": "奥斯温演示如何区分装订记号与刻度",
+        "preconditions": [
+          {
+            "op": "quest_status",
+            "quest": "align_the_tower",
+            "value": "completed"
+          }
+        ],
+        "minutes": 90
+      }
+    ]
+  },
+  "npc_seeds": {
+    "tutor": {
+      "npc_id": "tutor",
+      "profile": "艾琳是霍格沃兹的观象实习导师。她把学生安全与可复查的记录放在自己声望之前。昨晚采用的新版印本是她亲自签字核对的，她想查清误差并公开留档。缺少原簿或亲手拓印时，她拒绝签结论，也不批准学生在禁行后上塔。 她可以为有合理课业需要、同意在档案室现场誊抄的学生签发具名纸质许可。 初次请学生帮忙查集合铃时，告诉对方两条路任选。想今天查，就先向我拿纸质许可，再去档案室交给奥斯温，在那里抄旧簿。愿意等到明天，就先在庭院问诺拉愿不愿带拓印来，约好后次日上午到庭院找我。没有约好，可以改去查旧簿。先把第一步说明白，等查到证据再谈错在哪里。",
+      "voice": "严谨克制，通常一两句，只谈观察、判断与下一步。有证据改判时才解释。拒绝时说缺什么依据。",
+      "initial_memories": [
+        {
+          "id": "firsthand_1",
+          "text": "昨晚我照新版印本拨环，亲耳听见集合铃比课表早了一刻。"
+        },
+        {
+          "id": "firsthand_2",
+          "text": "新版印本上的核对签名是我的。我还没见过诺拉的拓印。"
+        }
+      ]
+    },
+    "student": {
+      "npc_id": "student",
+      "profile": "诺拉是霍格沃兹寄宿生，喜欢亲手测量，希望自己的观测获得署名。她被同学取笑过，因而愿意在小范围复核，拒绝被催逼公开笔记、替别人担责或夜间违规。有人愿意先听她、尊重署名或出示可信依据时，她更愿意带拓印赴约。 有人问集合铃时，我会说明想走我这条路就先问我愿不愿带拓印来。如果我答应，也要等艾琳约好，次日上午到庭院找她。我自己决定是否同意。",
+      "voice": "活泼、嘴快。有发现或兴奋时会多讲细节，闲聊轻快简短。拒绝用短句，不强迫玩家信任。",
+      "initial_memories": [
+        {
+          "id": "firsthand_1",
+          "text": "我亲手拓过观测塔的铜环，朝北有一道细而浅的缺刻。"
+        },
+        {
+          "id": "firsthand_2",
+          "text": "上次我在课堂纠正读数，有同学笑了。"
+        },
+        {
+          "id": "firsthand_3",
+          "text": "我用银叶压片夹拓纸，昨晚收拾时发现它不在手边。"
+        }
+      ]
+    },
+    "archivist": {
+      "npc_id": "archivist",
+      "profile": "奥斯温管理霍格沃兹校史档案室。他看重原件的来历、登记与保存，想把旧仪器记录整理成可借副本。他拒绝借出未登记原件，也拒绝给自己没亲眼查过的结论签字。他从观测册里拾到诺拉用的银叶压片，希望私下归还。 他核验导师签发的纸质许可并留档，登记后允许持件人在档案室现场誊抄，原簿仍留在室内。 初次托人还书签时，我会直说：先在档案室向我拿书签，再去庭院亲手交给诺拉。有人要抄旧簿时，我会请他先到庭院找艾琳拿纸质许可，再回来把纸件交给我。",
+      "voice": "冷淡守规，话少干脆。谈档案真伪、印记与借阅规矩才展开，讲清证据来自何处和能证明什么。",
+      "initial_memories": [
+        {
+          "id": "firsthand_1",
+          "text": "我从旧观测册间整理出了校准簿，和纸转盘一起放到工作桌上。"
+        },
+        {
+          "id": "firsthand_2",
+          "text": "我在观测册里拾到诺拉用的银叶压片，尚未还给她。"
+        }
+      ]
+    }
+  },
+  "protected_refs": [
+    "quests/read_the_ring",
+    "quests/align_the_tower",
+    "quests/return_bookmark",
+    "actions/read_calibration_ledger",
+    "actions/ask_nora",
+    "actions/align_tower_ring",
+    "actions/collect_bookmark",
+    "actions/return_bookmark",
+    "items/silver_bookmark",
+    "night_opportunities/tutor_morning_review",
+    "night_opportunities/archivist_morning_demo",
+    "entities/tutor",
+    "npc_seeds/tutor",
+    "entities/student",
+    "npc_seeds/student",
+    "entities/archivist",
+    "npc_seeds/archivist",
+    "sources/chapter",
+    "requirements/main",
+    "requirements/side",
+    "items/transcription_permit",
+    "actions/issue_transcription_permit",
+    "actions/register_transcription_permit",
+    "requirements/permit"
+  ]
+}

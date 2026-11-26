@@ -1,0 +1,136 @@
+{
+  "tool": "built-in image_gen.imagegen",
+  "calls": 3,
+  "audio_preserved": true,
+  "assets": [
+    {
+      "id": "home",
+      "file": "media/backgrounds/home-medieval-v2.png",
+      "size": [
+        836,
+        470
+      ],
+      "mode": "RGB",
+      "alpha_range": null,
+      "sha256": "73e7d2def45101cf5d5201049e1acdf7996bd8c98768a8190481c81a8083a81b"
+    },
+    {
+      "id": "village",
+      "file": "media/backgrounds/village-medieval-v2.png",
+      "size": [
+        836,
+        470
+      ],
+      "mode": "RGB",
+      "alpha_range": null,
+      "sha256": "3aab6d2dec9a83b4c6bc54e8301200884b2d28c1b10991cb64eae575ba022dfa"
+    },
+    {
+      "id": "lighthouse",
+      "file": "media/backgrounds/lighthouse-medieval-v2.png",
+      "size": [
+        836,
+        470
+      ],
+      "mode": "RGB",
+      "alpha_range": null,
+      "sha256": "496a7cbd3735b93607c802a7ef477515d05fa358eaffffda40ca809b3f3ad0db"
+    },
+    {
+      "id": "harbor",
+      "file": "media/backgrounds/harbor-medieval-v2.png",
+      "size": [
+        836,
+        470
+      ],
+      "mode": "RGB",
+      "alpha_range": null,
+      "sha256": "b3d12dc9b8ce2852017ae53cd3dc9dc73d0fcf905bf6b9468f4ede0af81245f6"
+    },
+    {
+      "id": "villager.neutral",
+      "file": "media/portraits/villager/neutral-medieval-v2.png",
+      "size": [
+        512,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "7731d597e707fcf2914837b545c3f16b566b698649a5984f3602ec644c4049e6"
+    },
+    {
+      "id": "baker.neutral",
+      "file": "media/portraits/baker/neutral-medieval-v2.png",
+      "size": [
+        512,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "706101a2ebe301a03e2cb828a8f60c1df91d5a49534a79cb4095ca26861c2538"
+    },
+    {
+      "id": "keeper.neutral",
+      "file": "media/portraits/keeper/neutral-medieval-v2.png",
+      "size": [
+        512,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "2ba84ee93136265a4c5ebb3f826bcd02767e72cfade88341d98843847cf7c2ae"
+    },
+    {
+      "id": "villager.happy",
+      "file": "media/portraits/villager/happy-medieval-v2.png",
+      "size": [
+        512,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "c34bd27dc70e0865572278ea69c73d06496a549d49dbee7b68cd987f92191d9a"
+    },
+    {
+      "id": "baker.happy",
+      "file": "media/portraits/baker/happy-medieval-v2.png",
+      "size": [
+        512,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "876c2f8bb85534b458a839e5e6adb485d5f6780ea59659a5347f84a57ce9d9a9"
+    },
+    {
+      "id": "keeper.happy",
+      "file": "media/portraits/keeper/happy-medieval-v2.png",
+      "size": [
+        512,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "34334e96b0a98367504c84cf13fe92c826184833d6baa679932b78d61cc4b0c4"
+    }
+  ],
+  "cropping": "2x2 backgrounds; three-column character sheets; no resampling"
+}

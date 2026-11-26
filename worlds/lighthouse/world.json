@@ -1,0 +1,688 @@
+{
+  "format": "world-definition/v1",
+  "world_id": "lighthouse",
+  "revision": 7,
+  "title": "海岸的一天",
+  "description": "玩家住在海边小屋，从家经村庄前往灯塔。林岚备有给陈伯的药包，周穗经营村里的面包房。路程影响时间，夜间可返家休息。送药、次日罗盘与次日送面包均以实际接取和交付推进。",
+  "clock": {
+    "start_minute": 480,
+    "night_minute": 1200,
+    "conversation_minutes": 5,
+    "home": "home"
+  },
+  "map": {
+    "size_km": {
+      "width": 12,
+      "height": 8
+    },
+    "walking_speed_kmh": 4,
+    "routes": [
+      {
+        "from": "home",
+        "to": "village",
+        "distance_km": 2
+      },
+      {
+        "from": "village",
+        "to": "lighthouse",
+        "distance_km": 8
+      },
+      {
+        "from": "village",
+        "to": "forest",
+        "distance_km": 1
+      }
+    ]
+  },
+  "locations": [
+    {
+      "id": "home",
+      "name": "家",
+      "description": "海边的小屋是你的住处。通往村庄的路有两公里，夜晚要回这里休息。",
+      "position_km": [
+        1,
+        2
+      ],
+      "background": "home",
+      "bgm": "sea_evening"
+    },
+    {
+      "id": "village",
+      "name": "村庄",
+      "description": "村庄依着港湾而建，林岚照看杂货铺，周穗在旁边的石炉面包房忙碌。另一条海岸路通向八公里外的灯塔。",
+      "position_km": [
+        3,
+        2
+      ],
+      "background": "village",
+      "bgm": "sea_evening"
+    },
+    {
+      "id": "lighthouse",
+      "name": "灯塔",
+      "description": "石塔立在海岸，陈伯在这里值守。从这里返回村庄需要两小时，回家还需再走半小时。",
+      "position_km": [
+        11,
+        2
+      ],
+      "background": "lighthouse",
+      "bgm": "sea_evening"
+    },
+    {
+      "id": "forest",
+      "name": "森林",
+      "background": "forest",
+      "bgm": "sea_evening",
+      "position_km": [
+        4,
+        4
+      ],
+      "description": "村庄旁的林间空地，树根与落叶间有史莱姆出没。"
+    }
+  ],
+  "entities": [
+    {
+      "id": "player",
+      "kind": "player",
+      "name": "旅人",
+      "location": "home",
+      "attributes": {
+        "coins": 0,
+        "health": 100,
+        "max_health": 100,
+        "attack": 5,
+        "defense": 5,
+        "mana": 50,
+        "max_mana": 50,
+        "magic_attack": 8
+      }
+    },
+    {
+      "id": "villager",
+      "kind": "npc",
+      "name": "林岚",
+      "quest_reaction": "strict",
+      "location": "village",
+      "attributes": {},
+      "profile": "林岚是村里的杂货铺掌柜，年轻时跟船运货，后来回乡照顾家人。她讲究信用、说话爽快，熟悉海边道路，和守塔人陈伯多年互相照应。她已替陈伯备好一包药。她与邻铺面包师周穗相识，昨天向周穗订了一只海盐面包，约好第二天取。",
+      "memory_file": "npcs/villager.json",
+      "portrait": "villager",
+      "author_notes": "作者指导，不给角色模型读：送药接取由 accept_delivery 的实际事件确定；林岚只亲历自己交出药包，不会因此知道陈伯后来收药或给罗盘。不得把她与玩家的私聊传给其他NPC。次日她可实际收到 salt_bread；玩家是否接取、是否携带面包不能从全局任务或背包推断，只从与她直接有关的交付和交谈获知。"
+    },
+    {
+      "id": "keeper",
+      "kind": "npc",
+      "name": "陈伯",
+      "quest_reaction": "patient",
+      "location": "lighthouse",
+      "attributes": {},
+      "profile": "陈伯是年长的守塔人，年轻时做过领航水手，寡言但重情义。他一直保存着一枚刻有海浪的黄铜旧罗盘。他托村庄的林岚准备药品，开始时仍在等待她的消息。",
+      "memory_file": "npcs/keeper.json",
+      "portrait": "keeper",
+      "author_notes": "作者指导，不给角色模型读：陈伯起初不知道玩家是否接取林岚的委托。送药实际发生后才认识这次交付并提出次日邀请；day>=2 且邀请有效时才可转移 compass。邀请、奖励、任务条件属于规则；未发生的剧情不能预装成角色知识。陈伯不知村庄私聊与面包委托进展。"
+    },
+    {
+      "id": "baker",
+      "kind": "npc",
+      "name": "周穗",
+      "quest_reaction": "patient",
+      "location": "village",
+      "attributes": {},
+      "memory_file": "npcs/baker.json",
+      "portrait": "baker",
+      "profile": "周穗是村里的面包师，约五十岁，父亲曾在港口给出海的人烤耐放的面包。她接手父亲留下的石炉，习惯清早揉面，做事细致，说话温和实在。她昨天接到邻铺掌柜林岚的一只海盐面包订单，约好第二天取。",
+      "author_notes": "作者指导，不给角色模型读：day>=2 可向旅人提出把 salt_bread 送给林岚的小忙，只有玩家明确同意并成功执行 accept_bread_delivery 才交出面包、激活任务。送达给林岚不自动成为周穗亲历；玩家回来告知也只是直接交谈中的消息。无额外奖励或后续预设任务，不新增引擎效果。"
+    },
+    {
+      "id": "merchant",
+      "kind": "npc",
+      "name": "马丁",
+      "location": "village",
+      "attributes": {
+        "coins": 20
+      },
+      "memory_file": "npcs/merchant.json",
+      "profile": "马丁是镇上的行商，早年随商队往返沿海村镇，如今在村庄广场经营小摊。他卖食品和旅行装备，按标价收钱，也接受有用物件抵价，愿意收下合适的礼物，不会无故白送货物。他和面包师周穗、杂货铺林岚打过照面，不知道她们与旅人的私下谈话。",
+      "shop": {
+        "prices": {
+          "shop_bread": 1,
+          "shop_cheese": 2,
+          "shop_sword": 4,
+          "shop_shield": 3,
+          "shop_dagger": 2,
+          "shop_armor": 4,
+          "health_potion_1": 2,
+          "health_potion_2": 2,
+          "mana_potion_1": 2,
+          "mana_potion_2": 2
+        }
+      }
+    },
+    {
+      "id": "mage",
+      "kind": "npc",
+      "name": "伊莲娜",
+      "location": "village",
+      "attributes": {
+        "coins": 10
+      },
+      "profile": "伊莲娜是一位约四十岁的女性学者，带有欧洲中世纪学者的衣着气质，在村庄教授魔法基础。她长期抄录和比较法术笔记，重视清楚的讲解与实际练习，说话耐心而严谨。她自己能够教授火、水、冰、雷四系的基础法术，也销售供初学者使用的木法杖。",
+      "portrait": "mage",
+      "memory_file": "npcs/mage.json",
+      "lessons": {
+        "firebolt": 0,
+        "waterbolt": 0,
+        "frostbolt": 0,
+        "spark": 0
+      },
+      "shop": {
+        "prices": {
+          "apprentice_staff": 4
+        }
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": "medicine",
+      "name": "给陈伯的药包",
+      "owner": "villager"
+    },
+    {
+      "id": "compass",
+      "name": "陈伯的旧罗盘",
+      "owner": "keeper",
+      "description": "陈伯年轻时跑船用的黄铜罗盘，刻着海浪。"
+    },
+    {
+      "id": "salt_bread",
+      "name": "林岚订的海盐面包",
+      "owner": "baker",
+      "description": "用干净布巾裹好的圆面包，表皮撒着少许海盐。"
+    },
+    {
+      "id": "shop_bread",
+      "name": "燕麦面包",
+      "owner": "merchant",
+      "kind": "food",
+      "barter_value": 1,
+      "description": "一只适合旅途携带的燕麦面包。"
+    },
+    {
+      "id": "shop_cheese",
+      "name": "羊乳酪",
+      "owner": "merchant",
+      "kind": "food",
+      "barter_value": 1,
+      "description": "用布包着的一小块羊乳酪。"
+    },
+    {
+      "id": "shop_sword",
+      "name": "旧铁剑",
+      "owner": "merchant",
+      "kind": "weapon",
+      "barter_value": 2,
+      "description": "保养过的旧铁剑，装备后攻击+5。",
+      "slot": "weapon",
+      "bonuses": {
+        "attack": 5
+      }
+    },
+    {
+      "id": "shop_shield",
+      "name": "木圆盾",
+      "owner": "merchant",
+      "kind": "equipment",
+      "barter_value": 2,
+      "description": "皮革包边的木圆盾，装备后防御+5。",
+      "slot": "offhand",
+      "bonuses": {
+        "defense": 5
+      }
+    },
+    {
+      "id": "shop_dagger",
+      "name": "铁匕首",
+      "owner": "merchant",
+      "kind": "weapon",
+      "slot": "weapon",
+      "bonuses": {
+        "attack": 2
+      },
+      "barter_value": 1,
+      "description": "便携的铁匕首，装备后攻击+2。"
+    },
+    {
+      "id": "shop_armor",
+      "name": "皮背心",
+      "owner": "merchant",
+      "kind": "equipment",
+      "slot": "body",
+      "bonuses": {
+        "defense": 3
+      },
+      "barter_value": 2,
+      "description": "结实的皮背心，装备后防御+3。"
+    },
+    {
+      "id": "apprentice_staff",
+      "name": "学徒木法杖",
+      "owner": "mage",
+      "kind": "weapon",
+      "slot": "weapon",
+      "bonuses": {
+        "attack": 1,
+        "magic_attack": 5
+      },
+      "barter_value": 2,
+      "description": "朴素的橡木法杖，装备后攻击+1、法术强度+5，与其他武器占用同一槽。"
+    },
+    {
+      "id": "health_potion_1",
+      "name": "回血药水",
+      "owner": "merchant",
+      "kind": "consumable",
+      "consumable": {
+        "resource": "health",
+        "amount": 40
+      },
+      "barter_value": 1,
+      "description": "恢复40点生命。战斗中使用占用一回合。"
+    },
+    {
+      "id": "health_potion_2",
+      "name": "回血药水",
+      "owner": "merchant",
+      "kind": "consumable",
+      "consumable": {
+        "resource": "health",
+        "amount": 40
+      },
+      "barter_value": 1,
+      "description": "恢复40点生命。战斗中使用占用一回合。"
+    },
+    {
+      "id": "mana_potion_1",
+      "name": "回蓝药水",
+      "owner": "merchant",
+      "kind": "consumable",
+      "consumable": {
+        "resource": "mana",
+        "amount": 25
+      },
+      "barter_value": 1,
+      "description": "恢复25点法力。战斗中使用占用一回合。"
+    },
+    {
+      "id": "mana_potion_2",
+      "name": "回蓝药水",
+      "owner": "merchant",
+      "kind": "consumable",
+      "consumable": {
+        "resource": "mana",
+        "amount": 25
+      },
+      "barter_value": 1,
+      "description": "恢复25点法力。战斗中使用占用一回合。"
+    }
+  ],
+  "actions": [
+    {
+      "id": "accept_delivery",
+      "name": "接下送药委托",
+      "intent": "accept",
+      "actor": "player",
+      "target": "villager",
+      "ai_interaction": true,
+      "duration_minutes": 5,
+      "description": "明确同意林岚的请求，接过给陈伯的药包。",
+      "preconditions": [
+        {
+          "op": "at",
+          "entity": "player",
+          "location": "village"
+        },
+        {
+          "op": "at",
+          "entity": "villager",
+          "location": "village"
+        },
+        {
+          "op": "owned_by",
+          "item": "medicine",
+          "entity": "villager"
+        },
+        {
+          "op": "quest_status",
+          "quest": "deliver_medicine",
+          "value": "available"
+        }
+      ],
+      "effects": [
+        {
+          "op": "transfer",
+          "item": "medicine",
+          "from": "villager",
+          "to": "player"
+        },
+        {
+          "op": "activate_quest",
+          "quest": "deliver_medicine"
+        }
+      ]
+    },
+    {
+      "id": "deliver_medicine",
+      "name": "把药包交给陈伯",
+      "intent": "deliver",
+      "actor": "player",
+      "target": "keeper",
+      "ai_interaction": true,
+      "item": "medicine",
+      "duration_minutes": 5,
+      "description": "将背包中林岚托付的药包实际转交守塔人陈伯。",
+      "preconditions": [
+        {
+          "op": "at",
+          "entity": "player",
+          "location": "lighthouse"
+        },
+        {
+          "op": "at",
+          "entity": "keeper",
+          "location": "lighthouse"
+        },
+        {
+          "op": "owned_by",
+          "item": "medicine",
+          "entity": "player"
+        },
+        {
+          "op": "quest_status",
+          "quest": "deliver_medicine",
+          "value": "active"
+        }
+      ],
+      "effects": [
+        {
+          "op": "transfer",
+          "item": "medicine",
+          "from": "player",
+          "to": "keeper"
+        }
+      ]
+    },
+    {
+      "id": "collect_compass",
+      "name": "接受陈伯的旧罗盘",
+      "intent": "receive",
+      "actor": "player",
+      "target": "keeper",
+      "ai_interaction": true,
+      "duration_minutes": 5,
+      "description": "第二天应邀来找陈伯，接受他承诺赠送的新东西：旧罗盘。",
+      "preconditions": [
+        {
+          "op": "day",
+          "value": 2
+        },
+        {
+          "op": "at",
+          "entity": "player",
+          "location": "lighthouse"
+        },
+        {
+          "op": "at",
+          "entity": "keeper",
+          "location": "lighthouse"
+        },
+        {
+          "op": "quest_status",
+          "quest": "visit_keeper_tomorrow",
+          "value": "active"
+        },
+        {
+          "op": "owned_by",
+          "item": "compass",
+          "entity": "keeper"
+        }
+      ],
+      "effects": [
+        {
+          "op": "transfer",
+          "item": "compass",
+          "from": "keeper",
+          "to": "player"
+        }
+      ]
+    },
+    {
+      "id": "accept_bread_delivery",
+      "name": "接下周穗的送面包请求",
+      "intent": "accept",
+      "actor": "player",
+      "target": "baker",
+      "item": "salt_bread",
+      "ai_interaction": true,
+      "duration_minutes": 5,
+      "description": "第二天起，明确答应周穗，接过林岚订的海盐面包。",
+      "preconditions": [
+        {
+          "op": "day",
+          "value": 2
+        },
+        {
+          "op": "at",
+          "entity": "player",
+          "location": "village"
+        },
+        {
+          "op": "at",
+          "entity": "baker",
+          "location": "village"
+        },
+        {
+          "op": "owned_by",
+          "item": "salt_bread",
+          "entity": "baker"
+        },
+        {
+          "op": "quest_status",
+          "quest": "deliver_bread",
+          "value": "available"
+        }
+      ],
+      "effects": [
+        {
+          "op": "transfer",
+          "item": "salt_bread",
+          "from": "baker",
+          "to": "player"
+        },
+        {
+          "op": "activate_quest",
+          "quest": "deliver_bread"
+        }
+      ]
+    },
+    {
+      "id": "deliver_bread",
+      "name": "把海盐面包交给林岚",
+      "intent": "deliver",
+      "actor": "player",
+      "target": "villager",
+      "item": "salt_bread",
+      "ai_interaction": true,
+      "duration_minutes": 5,
+      "description": "将周穗托付的海盐面包实际交给订面包的林岚。",
+      "preconditions": [
+        {
+          "op": "at",
+          "entity": "player",
+          "location": "village"
+        },
+        {
+          "op": "at",
+          "entity": "villager",
+          "location": "village"
+        },
+        {
+          "op": "owned_by",
+          "item": "salt_bread",
+          "entity": "player"
+        },
+        {
+          "op": "quest_status",
+          "quest": "deliver_bread",
+          "value": "active"
+        }
+      ],
+      "effects": [
+        {
+          "op": "transfer",
+          "item": "salt_bread",
+          "from": "player",
+          "to": "villager"
+        }
+      ]
+    }
+  ],
+  "quests": [
+    {
+      "id": "deliver_medicine",
+      "title": "替林岚把药包交给灯塔的陈伯",
+      "giver": "villager",
+      "initial_status": "available",
+      "deadline_minutes": 840,
+      "early_minutes": 180,
+      "description": "到村庄与林岚交谈，可接取这项委托。",
+      "complete_when": {
+        "type": "delivered",
+        "item": "medicine",
+        "from": "player",
+        "to": "keeper"
+      },
+      "rewards": [
+        {
+          "op": "add_attribute",
+          "entity": "player",
+          "attribute": "coins",
+          "amount": 5
+        },
+        {
+          "op": "activate_quest",
+          "quest": "visit_keeper_tomorrow"
+        }
+      ],
+      "recipient": "keeper"
+    },
+    {
+      "id": "visit_keeper_tomorrow",
+      "title": "第二天再访陈伯，领取旧罗盘",
+      "giver": "keeper",
+      "initial_status": "available",
+      "hidden_until_active": true,
+      "description": "送药后陈伯约你第二天再来，要给你一件新东西——他年轻时跑船用的旧罗盘。第一天不可领取。",
+      "complete_when": {
+        "type": "delivered",
+        "item": "compass",
+        "from": "keeper",
+        "to": "player"
+      },
+      "rewards": [],
+      "recipient": "player"
+    },
+    {
+      "id": "deliver_bread",
+      "title": "替周穗把海盐面包送给林岚",
+      "giver": "baker",
+      "recipient": "villager",
+      "initial_status": "available",
+      "description": "第二天起可到村庄与周穗交谈，帮她把林岚订的面包送到邻铺。",
+      "complete_when": {
+        "type": "delivered",
+        "action": "deliver_bread",
+        "item": "salt_bread",
+        "from": "player",
+        "to": "villager"
+      },
+      "rewards": []
+    }
+  ],
+  "encounters": [
+    {
+      "id": "slime_1",
+      "name": "火史莱姆",
+      "location": "forest",
+      "health": 20,
+      "attack": 7,
+      "defense": 2,
+      "reward_coins": 2,
+      "sprite": "slime.fire",
+      "element": "fire"
+    },
+    {
+      "id": "slime_2",
+      "name": "水史莱姆",
+      "location": "forest",
+      "health": 20,
+      "attack": 7,
+      "defense": 2,
+      "reward_coins": 2,
+      "sprite": "slime.water",
+      "element": "water"
+    },
+    {
+      "id": "slime_3",
+      "name": "冰史莱姆",
+      "location": "forest",
+      "health": 20,
+      "attack": 7,
+      "defense": 2,
+      "reward_coins": 2,
+      "sprite": "slime.ice",
+      "element": "ice"
+    },
+    {
+      "id": "slime_4",
+      "location": "forest",
+      "health": 20,
+      "attack": 7,
+      "defense": 2,
+      "reward_coins": 2,
+      "name": "雷史莱姆",
+      "element": "lightning",
+      "sprite": "slime.lightning"
+    }
+  ],
+  "spells": [
+    {
+      "id": "firebolt",
+      "name": "火花术",
+      "element": "fire",
+      "mana_cost": 6,
+      "power": 10
+    },
+    {
+      "id": "waterbolt",
+      "name": "水箭术",
+      "element": "water",
+      "mana_cost": 6,
+      "power": 10
+    },
+    {
+      "id": "frostbolt",
+      "name": "冰霜术",
+      "element": "ice",
+      "mana_cost": 8,
+      "power": 9
+    },
+    {
+      "id": "spark",
+      "name": "雷光术",
+      "element": "lightning",
+      "mana_cost": 8,
+      "power": 10
+    }
+  ]
+}

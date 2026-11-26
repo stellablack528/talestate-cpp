@@ -1,17 +1,7 @@
-# Security Policy
+# 安全与隐私约定
 
-## Reporting a vulnerability
+当前主线是 Python 统一运行时与 Ren'Py 客户端。世界生成结果作为数据加载，不执行生成的 Python、Ren'Py 或 shell 脚本；动作效果由运行时解释执行。
 
-Please report vulnerabilities privately to the project maintainers rather than
-opening a public issue. Include affected versions, reproduction steps, and the
-possible impact. Do not include secrets or personal data in reports.
+模型配置中的 API Key 只用于本次运行的请求，不写入本项目的世界、会话快照或手动存档。请勿把 Key、私人设定或玩家记录提交到仓库。`userdata/` 与本地工具缓存已加入忽略列表。
 
-## Trust boundary
-
-Story packages are untrusted input. They must pass structural validation,
-semantic validation, and (in later phases) simulation before publication.
-Generated content never executes code. API keys must be supplied through the
-host environment and must not appear in packages, logs, tests, or commits.
-
-The Phase 1 loader places a 16 MiB limit on an input JSON file. Hosts accepting
-content from untrusted users should add their own filesystem and process limits.
+报告问题时提供版本、复现步骤与必要日志，先移除密钥和个人信息。原项目的安全说明保留在 `旧内容/原项目说明/SECURITY.md`，其中旧加载器限制不代表当前主线。

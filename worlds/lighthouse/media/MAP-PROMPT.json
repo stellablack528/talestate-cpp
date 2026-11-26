@@ -1,0 +1,34 @@
+{
+  "tool": "built-in image_gen.imagegen",
+  "calls": 1,
+  "file": "media/maps/coast-map-v1.png",
+  "manifest_key": "maps.region",
+  "size": [
+    1672,
+    941
+  ],
+  "mode": "RGB",
+  "transparent": false,
+  "sha256": "478f22d3d8a075f69346383c7a61009a20f2ea3562751d8b51a4b69e57d54d14",
+  "prompt": "Use case: illustration-story. Asset type: production game regional map BACKGROUND, single wide 16:9 landscape image, north at top. A medieval European hand-painted coastal regional map on aged warm parchment, sober realistic storybook aesthetic, fine sepia ink with restrained watercolor, warm gray stone, muted olive forest, desaturated blue-gray sea, delicate parchment fibers. Orthographic map base with small pictorial miniature landmarks, not a landscape camera view. CRITICAL GEOGRAPHY AND LAYOUT: image normalized coordinates measured from TOP LEFT. Sea fills northern/top part, coastline roughly horizontal at y=0.22 with land extending SOUTH/downwards. Exactly FOUR landmark areas, centered at: HOME x=.15 y=.31, a SINGLE modest thatched stone-and-timber seaside cottage; VILLAGE x=.29 y=.31, a compact cluster of medieval stone/timber houses; LIGHTHOUSE x=.85 y=.31, a small crenellated rough-stone coastal fire-beacon tower on an eastern headland; FOREST x=.36 y=.50, a natural woodland clearing surrounded by oak/beech trees. Give landmarks fairly compact footprints and avoid covering their centers with ornament. Hand-drawn narrow earthy roads connect home to village to lighthouse, and branch south from village into forest clearing, ending there; no other branching destination. Low-key fields and scattered trees fill southern inland area, no extra settlements, castles, towers, docks or harbor. Northern sea continuous with gentle wave hatching. Keep readable quiet parchment around landmark centers for frontend labels and interactive markers. No words, letters, numbers, place names, compass rose, legends, UI, pins, route arrows, current-position symbol, grid, decorative border, people, monsters, quest symbols, treasure or watermark. The frontend will overlay names, current position and precise routes. Exactly one cohesive region map, not panels.",
+  "integration": "Image copying, manifest merge and current save sync handed to main agent; art agent only wrote this provenance and media documentation.",
+  "landmark_coordinates": {
+    "home": [
+      0.15,
+      0.31
+    ],
+    "village": [
+      0.29,
+      0.31
+    ],
+    "lighthouse": [
+      0.85,
+      0.31
+    ],
+    "forest": [
+      0.36,
+      0.5
+    ]
+  },
+  "notes": "Coordinates are generation layout targets; frontend controls exact label positions and route overlays."
+}

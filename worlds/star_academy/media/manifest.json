@@ -1,0 +1,32 @@
+{
+  "portraits": {
+    "tutor.neutral": {
+      "file": "media/portraits/tutor/neutral-v1.png"
+    },
+    "student.neutral": {
+      "file": "media/portraits/student/neutral-v1.png"
+    },
+    "archivist.neutral": {
+      "file": "media/portraits/archivist/neutral-v1.png"
+    }
+  },
+  "backgrounds": {
+    "dorm": {
+      "file": "media/backgrounds/dorm-v1.png"
+    },
+    "court": {
+      "file": "media/backgrounds/court-v1.png"
+    },
+    "archive": {
+      "file": "media/backgrounds/archive-v1.png"
+    },
+    "tower": {
+      "file": "media/backgrounds/tower-v1.png"
+    }
+  },
+  "maps": {
+    "region": {
+      "file": "media/maps/campus-map-v1.png"
+    }
+  }
+}

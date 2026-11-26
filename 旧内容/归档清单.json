@@ -1,0 +1,544 @@
+{
+  "Date": "2026-11-17",
+  "Purpose": "原项目与旧部署资料归档；当前主线保留在项目根目录",
+  "FileCount": 11461,
+  "Bytes": 934250446,
+  "Entries": [
+    {
+      "From": "legacy/cpp",
+      "To": "旧内容/原C++与Qt项目",
+      "FileCount": 85,
+      "Bytes": 2474899,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": "build",
+      "To": "旧内容/历史构建/build",
+      "FileCount": 219,
+      "Bytes": 223105507,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": "dist/TaleState-0.2.0-win64",
+      "To": "旧内容/历史游戏包/TaleState-0.2.0-win64",
+      "FileCount": 26,
+      "Bytes": 126556795,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": "dist/TaleState-local",
+      "To": "旧内容/历史游戏包/TaleState-local",
+      "FileCount": 31,
+      "Bytes": 51230987,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": "reports/PROJECT-REVIEW-20261117.md",
+      "To": "旧内容/历史审查/PROJECT-REVIEW-20261117.md",
+      "FileCount": 1,
+      "Bytes": 21830,
+      "SHA256": "130FBCFB3A2FC4BF2A45B8C3653DC3678E429EF9B997C835AD9D26365B658502",
+      "IsDirectory": false
+    },
+    {
+      "From": "reports/REVIEW-PROBES-20261117.txt",
+      "To": "旧内容/历史审查/REVIEW-PROBES-20261117.txt",
+      "FileCount": 1,
+      "Bytes": 918,
+      "SHA256": "237DB82E3F073E011F8BFA1CA5087EBB21CB2A125A767BAFE92848EA32F7E22A",
+      "IsDirectory": false
+    },
+    {
+      "From": "CMakeLists.txt",
+      "To": "旧内容/历史构建/根目录兼容入口.CMakeLists.txt",
+      "FileCount": 1,
+      "Bytes": 249,
+      "SHA256": "85531E985007A427E95DE483EDB1CA720891B3A90ED4259B94A29B6141A0BF18",
+      "IsDirectory": false
+    },
+    {
+      "From": "SECURITY.md",
+      "To": "旧内容/原项目说明/SECURITY.md",
+      "FileCount": 1,
+      "Bytes": 758,
+      "SHA256": "7845D5DEFD6A560CC51F11CF0CE5ED8BF53CB5F967B3DDE20BA7A315B2F934CB",
+      "IsDirectory": false
+    },
+    {
+      "From": "启动旧版.cmd",
+      "To": "旧内容/原项目说明/原启动旧版.cmd",
+      "FileCount": 1,
+      "Bytes": 70,
+      "SHA256": "AC3B9D25356B5AC3820720B297B4D6B264C141F146BFE2ED44757D77A6BFF821",
+      "IsDirectory": false
+    },
+    {
+      "From": "aqtinstall.log",
+      "To": "旧内容/历史部署过程/aqtinstall.log",
+      "FileCount": 1,
+      "Bytes": 7888,
+      "SHA256": "8DACE5084DEBF0D7FBF5A9057DB9E3C5E582E6288F0083DF597AC0D3D10DE175",
+      "IsDirectory": false
+    },
+    {
+      "From": ".tools/Qt",
+      "To": "旧内容/开发工具/Qt",
+      "FileCount": 4082,
+      "Bytes": 279970734,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": ".tools/python",
+      "To": "旧内容/开发工具/python",
+      "FileCount": 5044,
+      "Bytes": 101652281,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": ".tools/ninja",
+      "To": "旧内容/开发工具/ninja",
+      "FileCount": 18,
+      "Bytes": 647620,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": ".tools/deps",
+      "To": "旧内容/开发工具/deps",
+      "FileCount": 1892,
+      "Bytes": 33622356,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": ".tools/appdata/aqt",
+      "To": "旧内容/开发工具/aqt-data",
+      "FileCount": 0,
+      "Bytes": 0,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": ".tools/downloads/cmake-3.31.10-py3-none-win_amd64.whl",
+      "To": "旧内容/开发工具/安装包/cmake-3.31.10-py3-none-win_amd64.whl",
+      "FileCount": 1,
+      "Bytes": 36630429,
+      "SHA256": "F1EA1FE826355560E8976C3D5794D9357444209BC0E0D56676C71E6A571FD474",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/audit",
+      "To": "旧内容/历史部署过程/audit",
+      "FileCount": 7,
+      "Bytes": 4548093,
+      "SHA256": null,
+      "IsDirectory": true
+    },
+    {
+      "From": ".deployment/brief.stderr.log",
+      "To": "旧内容/历史部署过程/brief.stderr.log",
+      "FileCount": 1,
+      "Bytes": 0,
+      "SHA256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/brief.stdout.log",
+      "To": "旧内容/历史部署过程/brief.stdout.log",
+      "FileCount": 1,
+      "Bytes": 0,
+      "SHA256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/build.log",
+      "To": "旧内容/历史部署过程/build.log",
+      "FileCount": 1,
+      "Bytes": 92473,
+      "SHA256": "DB0A967EAA467F289B4775512559BEA03144449B0125414E137CA6F30C416AA6",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/build.py",
+      "To": "旧内容/历史部署过程/build.py",
+      "FileCount": 1,
+      "Bytes": 1480,
+      "SHA256": "D7BC94C2740250FE949F6D7A5E2C44BEE742E51DAFF8A6A0C64896FED2C1EF0B",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/check_windows.py",
+      "To": "旧内容/历史部署过程/check_windows.py",
+      "FileCount": 1,
+      "Bytes": 672,
+      "SHA256": "AC1A108A162A917074412F7B060170A8634414BE8089079A9AD85A0EFBEC5DAE",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/checks.json",
+      "To": "旧内容/历史部署过程/checks.json",
+      "FileCount": 1,
+      "Bytes": 49,
+      "SHA256": "7F670948ECA318762C150EE03B27828CB708756A1350028BE544EBFAD91C608B",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/configure.log",
+      "To": "旧内容/历史部署过程/configure.log",
+      "FileCount": 1,
+      "Bytes": 658,
+      "SHA256": "F972BB5659B980EDD377C472ACD2DEF0AE387F652D97E91201E6E04750A43608",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/ctest.log",
+      "To": "旧内容/历史部署过程/ctest.log",
+      "FileCount": 1,
+      "Bytes": 17585,
+      "SHA256": "CDFE601608476B19FDCFE710B9D58D2A071E72371B09118F83B708D386FE0D0F",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/deps.py",
+      "To": "旧内容/历史部署过程/deps.py",
+      "FileCount": 1,
+      "Bytes": 1106,
+      "SHA256": "E0E7CDE1819BEA2195D563AAD1DE65B2E276FA1F338D5830B205FA335B154695",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/deps_alt.py",
+      "To": "旧内容/历史部署过程/deps_alt.py",
+      "FileCount": 1,
+      "Bytes": 718,
+      "SHA256": "753CCD1FDC2FF507CD3AFFA44681B3B4212A597B85C4DB01CB2FE6B7F2AD9E45",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/deps_retry.py",
+      "To": "旧内容/历史部署过程/deps_retry.py",
+      "FileCount": 1,
+      "Bytes": 905,
+      "SHA256": "E603F71EA650C4722D8958BF65776F5304985A2BAFEE575D0C74A02B18CD3491",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/download.py",
+      "To": "旧内容/历史部署过程/download.py",
+      "FileCount": 1,
+      "Bytes": 1685,
+      "SHA256": "6678E298DC6D55BF817FD4F8BC0A49050B21EFC1AC9A9501C420D877F8426BDE",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/edit_sidebar.py",
+      "To": "旧内容/历史部署过程/edit_sidebar.py",
+      "FileCount": 1,
+      "Bytes": 11527,
+      "SHA256": "429CE5307DCF26B9D31FDDA0030B68834161A8F3DC3C086854F71840843EE001",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/fix_test_portability.py",
+      "To": "旧内容/历史部署过程/fix_test_portability.py",
+      "FileCount": 1,
+      "Bytes": 409,
+      "SHA256": "C2B171B7293FBBDC462B7E8D6283FC2789C017DF4B027253660951B60B154F4B",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/game-sidebar.png",
+      "To": "旧内容/历史部署过程/game-sidebar.png",
+      "FileCount": 1,
+      "Bytes": 20539,
+      "SHA256": "6613E3A4D90F167F9EE9B1627A7F41EB25EB01D22FAF8CDB6E5D02DE4F60D5CD",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/game-sidebar.png.npcs.png",
+      "To": "旧内容/历史部署过程/game-sidebar.png.npcs.png",
+      "FileCount": 1,
+      "Bytes": 20726,
+      "SHA256": "453C2F702481CF928FBC8D501A68C576E630124B67B7CC3B1512A06025559841",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/layout.stderr.log",
+      "To": "旧内容/历史部署过程/layout.stderr.log",
+      "FileCount": 1,
+      "Bytes": 0,
+      "SHA256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/layout.stdout.log",
+      "To": "旧内容/历史部署过程/layout.stdout.log",
+      "FileCount": 1,
+      "Bytes": 0,
+      "SHA256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/main-layout.png",
+      "To": "旧内容/历史部署过程/main-layout.png",
+      "FileCount": 1,
+      "Bytes": 30371,
+      "SHA256": "475438ADD84A690A315F4F5C98FD58475C72461FFC52082727F953132C7A358E",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/main-layout.png.settings.png",
+      "To": "旧内容/历史部署过程/main-layout.png.settings.png",
+      "FileCount": 1,
+      "Bytes": 9638,
+      "SHA256": "7B86BC61A6E95F4AAA6D87C591E5FDD42FDFF6516FFD0D3DD7BD8F56FEE97DC7",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/msvc-env.json",
+      "To": "旧内容/历史部署过程/msvc-env.json",
+      "FileCount": 1,
+      "Bytes": 4826,
+      "SHA256": "DF6841848223F597B3F59342A60EC5C9663E48216961A9D9A85A79D6C22216D8",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/msvc_env.py",
+      "To": "旧内容/历史部署过程/msvc_env.py",
+      "FileCount": 1,
+      "Bytes": 802,
+      "SHA256": "57F1A8C48AC44ECE49DD9EA19321EDD6F3231B5513BBF687C08E527DC472D852",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/package.log",
+      "To": "旧内容/历史部署过程/package.log",
+      "FileCount": 1,
+      "Bytes": 119,
+      "SHA256": "6942EC746E5AA46AB42C8BE02C058C41C6CD3F288E697E41B1EEB4516598BE89",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/package.py",
+      "To": "旧内容/历史部署过程/package.py",
+      "FileCount": 1,
+      "Bytes": 1451,
+      "SHA256": "14856BBB40AF76B04C85779034CDE42D587D946151508127FFE39216A1DA06C4",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/refactor_render.py",
+      "To": "旧内容/历史部署过程/refactor_render.py",
+      "FileCount": 1,
+      "Bytes": 2443,
+      "SHA256": "901F2CDFF38A46C7DB429E9E923B06F94AE025B7FC424E12CD55F9FD76E09A6A",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/test.py",
+      "To": "旧内容/历史部署过程/test.py",
+      "FileCount": 1,
+      "Bytes": 703,
+      "SHA256": "4F6EB86B61375CB7C82380B4C3AC005CEEDB980CE77F02EA8C9E506F0122DE41",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/verify.py",
+      "To": "旧内容/历史部署过程/verify.py",
+      "FileCount": 1,
+      "Bytes": 746,
+      "SHA256": "68DB703BCFC493AA5DB06B50C424B76D9626F5ECF8604328107BB19B8CDAFF0B",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/windows-layout.png",
+      "To": "旧内容/历史部署过程/windows-layout.png",
+      "FileCount": 1,
+      "Bytes": 65697,
+      "SHA256": "24381CDB87B7C7EFF5B72D7DE943BA25C9A677669DF20AA96E3FF82DBB0E8811",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/windows-layout.png.settings.png",
+      "To": "旧内容/历史部署过程/windows-layout.png.settings.png",
+      "FileCount": 1,
+      "Bytes": 32849,
+      "SHA256": "FBE484F808060B2070CECB88B2C8F896798DA528F4568540303F37AC8D0986B2",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/windows-sidebar.png",
+      "To": "旧内容/历史部署过程/windows-sidebar.png",
+      "FileCount": 1,
+      "Bytes": 80939,
+      "SHA256": "A83D3C05B717CED07C32210ABDA0E9799EB79D1CC853FD1E017F66029C45CECE",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/windows-sidebar.png.npcs.png",
+      "To": "旧内容/历史部署过程/windows-sidebar.png.npcs.png",
+      "FileCount": 1,
+      "Bytes": 85462,
+      "SHA256": "204F595796E9A42D7FE29DC723729B51EEB303E7CA6F365030AA3BB52FACE5E8",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/TaleState-0.2.0-win64.zip",
+      "To": "旧内容/历史部署过程/TaleState-0.2.0-win64.zip",
+      "FileCount": 1,
+      "Bytes": 36646227,
+      "SHA256": "9915A370131CF4EB244953D4FA2BC677D5F2E7EEA1E8DCDA2E6AFE327BDDC421",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-00",
+      "To": "旧内容/历史部署过程/下载分片/part-00",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "53DE8C5F744FF0F185E216BD290527FEC816703B7B88142A8859230459E17C12",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-01",
+      "To": "旧内容/历史部署过程/下载分片/part-01",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "70AB2755D15648670A077B9D1F0EEDDE8A6D6538D8C04426881D9D19DED2D311",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-02",
+      "To": "旧内容/历史部署过程/下载分片/part-02",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "CC23DB816492925BC1054BDD2CF441A73FF966E4ADC3DF6375759CBE22D6E154",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-03",
+      "To": "旧内容/历史部署过程/下载分片/part-03",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "3A665BD82F3CE98622E46D5563B2A1DCDCFBC7D6FF08F1ABFCA8A2391B07B1DE",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-04",
+      "To": "旧内容/历史部署过程/下载分片/part-04",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "7D705E6C28BF610686DE4D061799DD79AB2B0AA7EE103054BF0E86920BF98239",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-05",
+      "To": "旧内容/历史部署过程/下载分片/part-05",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "F7C3712326B0099B39C1CDE8087ECDC9BBEC07A9648D2012F07A08987310ED12",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-06",
+      "To": "旧内容/历史部署过程/下载分片/part-06",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "0707657496621F6A6112AE9BF27793BD1F4DC67EC004524F3FE2233769BE07BA",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-07",
+      "To": "旧内容/历史部署过程/下载分片/part-07",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "C868A773CB3BCE5D5BD9DA8620893BA6473B9AB9B8FCF848A3E40BC928908ACB",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-08",
+      "To": "旧内容/历史部署过程/下载分片/part-08",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "DACC30DD6C5FCD012EA480143537CA88AB9D2825B240ABAE9254A45DB07F1224",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-09",
+      "To": "旧内容/历史部署过程/下载分片/part-09",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "C8C92EA82F1555F7D387EDC1C7C3A7E6D29FF24A90BD7D5D4870E68B60B3ABA5",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-10",
+      "To": "旧内容/历史部署过程/下载分片/part-10",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "AD72665297327B6CF7A1BF5E3670F08D368BC5F7FA74332E7D2AD0E7BC8B8CEC",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-11",
+      "To": "旧内容/历史部署过程/下载分片/part-11",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "24699780124074DAB9A4EA7C35A261726DB8DF46E892CEE2F8D8C32024F04DC5",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-12",
+      "To": "旧内容/历史部署过程/下载分片/part-12",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "C057C37133B82D144FB4DA541995D5FCD6CC5EF9EDC0C82A48F84A5EEF85035E",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-13",
+      "To": "旧内容/历史部署过程/下载分片/part-13",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "F9D2F5FA37072A36E8D86D98C4A0D136A79C344D005681DB356B9A7AB9D1AA58",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-14",
+      "To": "旧内容/历史部署过程/下载分片/part-14",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "3D8298D613F53B147B741359E4E2CEB8EBE939ABDF7ECDFB4E72D14110E58C87",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-15",
+      "To": "旧内容/历史部署过程/下载分片/part-15",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "A6D615829C9F213F48F9070694C638DDB9A1A654D3E6EACC2A1286597A096F2D",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-16",
+      "To": "旧内容/历史部署过程/下载分片/part-16",
+      "FileCount": 1,
+      "Bytes": 2097152,
+      "SHA256": "F7A232F6EF17EA994BB054C2B07BEF20CE7990B320E464DDAD85111A624DFB7C",
+      "IsDirectory": false
+    },
+    {
+      "From": ".deployment/part-17",
+      "To": "旧内容/历史部署过程/下载分片/part-17",
+      "FileCount": 1,
+      "Bytes": 994643,
+      "SHA256": "305100110F094FC999402EDC3EA7E47B91A1F8BB366169672A7B2870D7114DC9",
+      "IsDirectory": false
+    }
+  ]
+}

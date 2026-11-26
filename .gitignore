@@ -1,6 +1,25 @@
 /build/
+/.tools/
+/.deployment/
+aqtinstall.log
+/userdata/
+/api.txt
+/clients/renpy/game/worlds/
+/clients/renpy/game/python-packages/talestate/
+/clients/renpy/game/fonts/
+/clients/renpy/game/cache/
+/clients/renpy/game/saves/
+/clients/renpy/userdata/
+/clients/renpy/*.txt
+*.rpyc
+__pycache__/
+*.pyc
 /build-*/
 /dist/
+/旧内容/历史游戏包/
+/旧内容/历史构建/
+/旧内容/历史部署过程/
+/旧内容/开发工具/
 /out/
 /docs/blog/
 /.cache/
@@ -10,3 +29,6 @@ CMakeUserPresets.json
 *.user
 *.swp
 *.tmp
+
+# Local generated art workspace
+/tools/art_work/

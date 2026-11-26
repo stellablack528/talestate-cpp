@@ -1,0 +1,81 @@
+{
+  "backgrounds": {
+    "harbor": {
+      "file": "media/backgrounds/harbor-medieval-v2.png"
+    },
+    "lighthouse": {
+      "file": "media/backgrounds/lighthouse-medieval-v2.png"
+    },
+    "village": {
+      "file": "media/backgrounds/village-medieval-v2.png"
+    },
+    "home": {
+      "file": "media/backgrounds/home-medieval-v2.png"
+    },
+    "forest": {
+      "file": "media/backgrounds/forest-medieval-v1.png"
+    }
+  },
+  "portraits": {
+    "keeper.neutral": {
+      "file": "media/portraits/keeper/neutral-medieval-v2.png"
+    },
+    "keeper.happy": {
+      "file": "media/portraits/keeper/happy-medieval-v2.png"
+    },
+    "villager.neutral": {
+      "file": "media/portraits/villager/neutral-medieval-v2.png"
+    },
+    "baker.neutral": {
+      "file": "media/portraits/baker/neutral-medieval-v2.png"
+    },
+    "villager.happy": {
+      "file": "media/portraits/villager/happy-medieval-v2.png"
+    },
+    "baker.happy": {
+      "file": "media/portraits/baker/happy-medieval-v2.png"
+    },
+    "mage.neutral": {
+      "file": "media/portraits/mage/neutral-v1.png"
+    },
+    "mage.happy": {
+      "file": "media/portraits/mage/happy-v1.png"
+    }
+  },
+  "bgm": {
+    "sea_evening": {
+      "file": "media/audio/bgm/sea_evening.wav"
+    }
+  },
+  "sfx": {
+    "delivery": {
+      "file": "media/audio/sfx/delivery.wav"
+    }
+  },
+  "voice": {},
+  "event_sounds": {
+    "delivered": "delivery"
+  },
+  "monsters": {
+    "slime": {
+      "file": "media/monsters/slime-v1.png"
+    },
+    "slime.fire": {
+      "file": "media/monsters/slime-fire-v1.png"
+    },
+    "slime.water": {
+      "file": "media/monsters/slime-water-v1.png"
+    },
+    "slime.ice": {
+      "file": "media/monsters/slime-ice-v1.png"
+    },
+    "slime.lightning": {
+      "file": "media/monsters/slime-lightning-v1.png"
+    }
+  },
+  "maps": {
+    "region": {
+      "file": "media/maps/coast-map-v1.png"
+    }
+  }
+}
