@@ -33,10 +33,23 @@ def render_event(engine, event):
         return "完成任务：" + engine.quests[event["quest"]]["title"]
     if kind == "quest_accepted":
         return "接取委托：" + engine.quests[event["quest"]]["title"]
+    if kind == "quest_feedback":
+        title = engine.quests[event["quest"]]["title"]
+        name = engine.name(event["npc"])
+        overdue = {"strict": "对逾期很不满", "balanced": "对逾期有些失望", "patient": "愿意再等一等，但对延误有所顾虑"}
+        early = {"strict": "肯定你提前完成了约定", "balanced": "为你提前完成这件事道谢", "patient": "看到你提前办完，松了一口气"}
+        reaction = {"overdue": overdue[event["style"]], "early": early[event["style"]], "quality": "认可你有实据、办得扎实",
+                    "on_time": "感谢你按时完成", "late": "确认你已补做完这件事"}
+        detail = reaction[event["result"]]
+        change = event["trust_change"]
+        trust = f" 信任 {change:+d}。" if change else ""
+        return f"「{title}」：{name}{detail}。{trust}"
     if kind == "waited":
         return "在家消磨了一段时间，天色渐暗。" if event.get("until_evening") else "休息了一小时。"
     if kind == "slept":
         return f"在家睡了一觉，现在是第 {event['day']} 天 {event['wake_time']}。"
+    if kind == "night_updates_skipped":
+        return "昨晚有些见闻没能整理，今天的旅程已开始。"
     if kind == "attribute_changed":
         labels = {"coins": "金币", "health": "生命", "stamina": "体力"}
         attribute = labels.get(event["attribute"], event["attribute"])
@@ -80,7 +93,7 @@ def render_event(engine, event):
 def presentation(engine, events):
     return [{"event_id": event["event_id"], "kind": "dialogue" if event["type"] == "dialogue" else "fact",
              "speaker": engine.name(event["npc"]) if event["type"] == "dialogue" else "旅途",
-             "text": render_event(engine, event), "npc_id": event.get("npc"),
+             "text": render_event(engine, event), "npc_id": event.get("npc") if event["type"] != "quest_feedback" else None,
              "expression": event.get("expression", "neutral"), "voice": event.get("voice")}
             for event in events if event["type"] not in ("item_created", "survey_offered") and
             (event["type"] != "moved" or event["entity"] == engine.player)]

@@ -1,7 +1,7 @@
 {
   "format": "world-definition/v1",
   "world_id": "lighthouse",
-  "revision": 6,
+  "revision": 7,
   "title": "海岸的一天",
   "description": "玩家住在海边小屋，从家经村庄前往灯塔。林岚备有给陈伯的药包，周穗经营村里的面包房。路程影响时间，夜间可返家休息。送药、次日罗盘与次日送面包均以实际接取和交付推进。",
   "clock": {
@@ -101,6 +101,7 @@
       "id": "villager",
       "kind": "npc",
       "name": "林岚",
+      "quest_reaction": "strict",
       "location": "village",
       "attributes": {},
       "profile": "林岚是村里的杂货铺掌柜，年轻时跟船运货，后来回乡照顾家人。她讲究信用、说话爽快，熟悉海边道路，和守塔人陈伯多年互相照应。她已替陈伯备好一包药。她与邻铺面包师周穗相识，昨天向周穗订了一只海盐面包，约好第二天取。",
@@ -112,6 +113,7 @@
       "id": "keeper",
       "kind": "npc",
       "name": "陈伯",
+      "quest_reaction": "patient",
       "location": "lighthouse",
       "attributes": {},
       "profile": "陈伯是年长的守塔人，年轻时做过领航水手，寡言但重情义。他一直保存着一枚刻有海浪的黄铜旧罗盘。他托村庄的林岚准备药品，开始时仍在等待她的消息。",
@@ -123,6 +125,7 @@
       "id": "baker",
       "kind": "npc",
       "name": "周穗",
+      "quest_reaction": "patient",
       "location": "village",
       "attributes": {},
       "memory_file": "npcs/baker.json",
@@ -550,6 +553,8 @@
       "title": "替林岚把药包交给灯塔的陈伯",
       "giver": "villager",
       "initial_status": "available",
+      "deadline_minutes": 840,
+      "early_minutes": 180,
       "description": "到村庄与林岚交谈，可接取这项委托。",
       "complete_when": {
         "type": "delivered",

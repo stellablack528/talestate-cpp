@@ -35,7 +35,7 @@ def _errand(engine, memory, giver, request, day, events):
                   expires_day=day + 3 if letter is not None else None)
 
 
-def evolve_day(provider, engine, memory, day, overnight_minutes=720):
+def evolve_day(request_reply, engine, memory, day, overnight_minutes=720):
     """A meeting is real; sharing a statement never proves its contents true."""
     if engine.state.get("social_days", {}).get(str(day), {}).get("status") == "completed":
         return []
@@ -66,7 +66,7 @@ def evolve_day(provider, engine, memory, day, overnight_minutes=720):
                                                                  row["location"])) <= overnight_minutes
                      and not any(visit["npc"] == row["npc"] and visit["status"] in ("open", "attended")
                                  for visit in engine.state.get("visits", {}).values())}
-    result = provider.json_reply(
+    result = request_reply(
         '你是中世纪小镇的日常生活统筹。返回JSON示例：'
         '{"meetings":[{"participants":["baker","villager"],"topic":"supplies"}]}。'
         '根据各人当前动作选择零到两次自然的日常见面，可以闲聊、互相照应、商量明天。'
@@ -106,7 +106,7 @@ def evolve_day(provider, engine, memory, day, overnight_minutes=720):
             facts = {"fact." + str(i): fact for i, fact in enumerate(context.pop("notes"))}
             own_items = [{"id": key, "name": candidate.name(key)} for key, owner in candidate.state["owners"].items()
                          if owner == actor and key not in reserved_items(candidate)]
-            reply = provider.json_reply(
+            reply = request_reply(
                 '你只扮演此NPC，正在与指定人物短暂交流。返回JSON示例：'
                 '{"activity":"整理好摊位，准备明天开门","share_facts":[],"request":null}。'
                 '只能知道自己的经历和对方本次明确告诉你的heard内容，不知玩家与别人私聊。'
@@ -123,9 +123,11 @@ def evolve_day(provider, engine, memory, day, overnight_minutes=720):
                  "known_people": [{"id": key, "name": candidate.name(key)} for key in records.records
                                   if key == partner or candidate.name(key) in records.records[actor]["profile"]]})
             ids = reply.get("share_facts", [])
-            if (not isinstance(reply.get("activity"), str) or not reply["activity"].strip() or
-                    not isinstance(ids, list) or len(ids) > 3 or any(not isinstance(key, str) or key not in facts for key in ids)):
-                raise ModelError("夜间角色返回的 activity 或分享事实 ID 无效。")
+            if not isinstance(reply.get("activity"), str) or not reply["activity"].strip():
+                raise ModelError(f"夜间角色 {actor} 的 activity 缺失或无效。")
+            if (not isinstance(ids, list) or len(ids) > 3 or
+                    any(not isinstance(key, str) or key not in facts for key in ids)):
+                raise ModelError(f"夜间角色 {actor} 的分享事实 ID 无效。")
             shared[actor] = [facts[key] for key in ids]
             replies[actor] = reply
         events = []

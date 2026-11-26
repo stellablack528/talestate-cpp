@@ -58,7 +58,7 @@ def witnessed_events(engine, npc_id, events, previous=()):
         elif kind == "spell_learned":
             visible = npc_id == event["teacher"]
         elif kind in ("appointment_attended", "visit_scheduled", "visit_missed", "npc_decided",
-                     "quest_expired", "survey_offered", "survey_reported"):
+                     "quest_expired", "quest_feedback", "survey_offered", "survey_reported"):
             visible = npc_id == event["npc"]
         elif kind == "item_created":
             visible = npc_id == event["entity"]

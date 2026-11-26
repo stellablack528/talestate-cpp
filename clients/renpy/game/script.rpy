@@ -46,7 +46,8 @@ init python:
     def tale_tick():
         tale.poll()
         if tale.sleeping:
-            renpy.show_screen("tale_sleep")
+            if not renpy.get_screen("tale_sleep"):
+                renpy.show_screen("tale_sleep")
         else:
             renpy.hide_screen("tale_sleep")
         tale_sync_audio()
@@ -237,13 +238,22 @@ label tale_check:
         $ renpy.pause(0.3, hard=True, modal=False)
         $ renpy.screenshot(os.environ["TALESTATE_UI_CHECK"] + ".potions.png")
         hide screen tale_inventory
-        $ tale.sleeping = True
-        show screen tale_sleep
+        $ tale.session.perform("travel.village")
+        $ tale.session.perform("travel.home")
+        if not tale.view()["clock"]["night"]:
+            $ tale.session.perform("wait_evening")
+        $ sleep_check_day = tale.view()["clock"]["day"]
+        $ tale_action("sleep")
         $ renpy.pause(0.2, hard=True, modal=False)
         $ renpy.screenshot(os.environ["TALESTATE_UI_CHECK"] + ".sleep.png")
-        $ renpy.pause(0.3, hard=True, modal=False)
-        $ tale.sleeping = False
+        $ tale.fast_forward_sleep()
+        $ assert tale.view()["clock"]["day"] == sleep_check_day + 1 and not tale.sleeping
         hide screen tale_sleep
+        $ tale.session.perform("wait_evening")
+        $ tale_action("sleep")
+        $ tale.sleep_waiting = True
+        $ renpy.pause(2.2, hard=True, modal=False)
+        $ assert tale.view()["clock"]["day"] == sleep_check_day + 2 and not tale.sleeping
     show screen tale_settings
     $ renpy.pause(0.3, hard=True, modal=True)
     $ renpy.screenshot(os.environ["TALESTATE_UI_CHECK"] + ".settings.png")

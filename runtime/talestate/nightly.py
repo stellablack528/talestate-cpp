@@ -17,8 +17,8 @@ def dialogue_batches(rows):
     return batches
 
 
-def summarize_day(provider, engine, memory, npc_id, day, dialogues, batch=0):
-    response = provider.json_reply(
+def summarize_day(reply, memory, npc_id, day, dialogues, batch=0):
+    response = reply(
         '整理一个NPC自己当天的对话，返回JSON，示例：'
         '{"facts":[{"who":"旅人","when":"第1天下午","what":"自述名叫罗文","source":"玩家自述"}]}。'
         '只提炼最重要的人物、时间、事件、约定、关系变化。普通闲聊、问候、逐句原文全部省略。'

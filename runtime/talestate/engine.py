@@ -1,6 +1,7 @@
 """One authority for positions, ownership, tasks, time and committed events."""
 
 from copy import deepcopy
+from .quest_feedback import reward_feedback
 from .travel import TravelMap
 from .story import alternatives, matches, visit_actions, issue_receipt, survey_action, survey_record
 
@@ -303,6 +304,7 @@ class Engine:
                 continue
             candidate["quests"][key] = "completed"
             self._event(candidate, events, "quest_completed", quest=key, evidence_id=proof["event_id"])
+            reward_feedback(self, candidate, events, quest, proof)
             for reward in quest.get("rewards", []):
                 self._effect(candidate, events, reward, proof.get("action", "exchange"))
             if quest.get("return_receipt"):

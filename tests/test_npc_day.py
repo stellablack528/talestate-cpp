@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from talestate import Session
+from talestate.engine import ActionError
 from talestate.provider import ModelError
 
 WORLD = Path(__file__).resolve().parents[1] / "worlds/lighthouse"
@@ -100,25 +101,43 @@ class NPCDay(unittest.TestCase):
             self.assertEqual(game.dialogues, restored.dialogues)
             self.assertNotIn("conversations", restored.memory.context("villager"))
 
-    def test_home_can_wait_until_night_but_sleep_requires_a_key_even_without_dialogues(self):
+    def test_offline_sleep_preserves_unfinished_delivery(self):
         with tempfile.TemporaryDirectory() as data:
             game = Session(WORLD, data)
-            owners = deepcopy(game.engine.state["owners"])
-            game.perform("wait_evening")
-            self.assertEqual(game.engine.clock()["label"], "20:00")
-            snapshot = game.snapshot()
-            for url in ("https://api.deepseek.com/v1", "http://127.0.0.1:1234/v1"):
-                game.configure(url, "", "deepseek-flash")
-                with self.assertRaisesRegex(ModelError, "API Key"):
-                    game.perform("sleep")
-                self.assertEqual(game.snapshot(), snapshot)
             game.provider = DayModel()
-            game.perform("sleep")
-            self.assertEqual([row["phase"] for row in game.provider.contexts], ["night_director"])
+            game.perform("travel.village")
+            game.perform("accept_delivery")
+            self.assertEqual(game.engine.state["quests"]["deliver_medicine"], "active")
+            owners = deepcopy(game.engine.state["owners"])
+            go_to_bed(game)
+            self.assertEqual(game.engine.clock()["label"], "20:00")
+            self.assertNotIn("deliver_medicine", game.engine.state.get("overdue_quests", {}))
+            game.configure("https://api.deepseek.com/v1", "", "deepseek-flash")
+            morning = game.perform("sleep")
             self.assertEqual((game.engine.clock()["day"], game.engine.clock()["label"]), (2, "08:00"))
+            self.assertTrue(any("林岚对逾期很不满" in line["text"] for line in morning))
             self.assertEqual(game.engine.state["owners"], owners)
+            self.assertEqual(game.engine.state["quests"]["deliver_medicine"], "active")
+            saved = Session.open_save(game.session_dir)
+            self.assertEqual(saved.engine.state, game.engine.state)
+            game = saved
+            with self.assertRaises(ActionError):
+                game.perform("sleep")
             game.perform("travel.village")
             self.assertNotIn("wait_evening", [a["id"] for a in game.view()["actions"]])
+            model = game.provider = DayModel()
+            game.take_turn("药还送得过去吗？", npc_id="villager")
+            self.assertEqual(model.contexts[-1]["own_attributes"]["quest_trust"], -3)
+            self.assertTrue(any(quest["id"] == "deliver_medicine" and quest["known_feedback"] == "overdue"
+                                for quest in model.contexts[-1]["known_quests"]))
+            self.assertNotIn("quest_trust", game.engine.state["entities"]["baker"]["attributes"])
+            game.perform("travel.lighthouse")
+            game.perform("deliver_medicine")
+            self.assertEqual(game.engine.state["quests"]["deliver_medicine"], "completed")
+            self.assertEqual(game.view()["player"]["attributes"]["coins"], 5)
+            feedback = [event["result"] for event in game.engine.state["events"]
+                        if event["type"] == "quest_feedback" and event["quest"] == "deliver_medicine"]
+            self.assertEqual(feedback, ["overdue", "late"])
 
     def test_task_opening_does_not_repeat_after_revisit_or_reload(self):
         with tempfile.TemporaryDirectory() as data:
@@ -154,28 +173,12 @@ class NPCDay(unittest.TestCase):
             others = deepcopy(game.memory.records["keeper"])
             owners, quests = deepcopy(game.engine.state["owners"]), deepcopy(game.engine.state["quests"])
             go_to_bed(game)
-            model.fail_night = True
-            calls = len(model.contexts)
-            with self.assertRaises(ModelError):
-                game.perform("sleep")
-            self.assertEqual(len(model.contexts), calls + 1)
-            self.assertEqual(game.engine.clock()["day"], 1)
-            self.assertEqual(game.memory.records["villager"]["plans"][0]["status"], "planned")
-            game = Session.open_save(game.session_dir)
-            self.assertTrue(game.engine.state["night_in_progress"])
-            game.provider = model
-            model.fail_night = False
             model.fail_director = True
-            with self.assertRaises(ModelError):
-                game.perform("sleep")
-            self.assertEqual(game.engine.clock()["day"], 1)
-            game = Session.open_save(game.session_dir)
-            game.provider = model
-            model.fail_director = False
             calls = len(model.contexts)
-            game.perform("sleep")
-            self.assertEqual([row.get("phase") for row in model.contexts[calls:]], ["night_director"])
+            lines = game.perform("sleep")
+            self.assertEqual([row.get("phase") for row in model.contexts[calls:]], ["nightly", "night_director"])
             self.assertEqual(game.engine.clock()["day"], 2)
+            self.assertTrue(any("没能整理" in line["text"] for line in lines))
             record = game.memory.records["villager"]
             self.assertEqual(record["summary_days"]["1"]["status"], "completed")
             self.assertNotIn("night_in_progress", game.engine.state)

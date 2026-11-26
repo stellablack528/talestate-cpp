@@ -23,6 +23,8 @@
 
 `complete_when` 接收单个匹配对象或一组任选其一的匹配对象。必需配对为 delivered/item/from/to、combat_won/enemy、spell_learned/spell、clue_found/clue、appointment_attended/visit、npc_decided/npc/decision。匹配对象也可以限定 action 等实际事件字段。任务奖励随首次匹配一起提交。
 
+任务可通过 `deadline_minutes` 设置接取后经过多少游戏分钟算到期，初始已接任务从开局计算。`early_minutes` 是小于期限的提前完成窗口，`quality_when` 可按与 `complete_when` 相同的格式匹配已经记录的优质完成证据。任务经过期限后仍可完成。运行时在委托人处记录一次逾期反馈，在实际见证完成的 NPC 处记录完成反馈，并保存到该 NPC 的 `quest_trust` 属性，创作者可用现有属性条件为后续行动设置门槛。NPC 可配置 `quest_reaction` 为 `strict`、`balanced` 或 `patient`，缺省用 `balanced`。动态日间委托同样可以定义期限与提前窗口。
+
 调查效果使用 `{op:investigate, entity, location, clue}`，玩家须在指定地点，产生 clue_found。人物决定使用 `{op:npc_decision, npc, decision}`。动作必须将该人物设为 target 并启用 ai_interaction。运行时只在该人物明确返回 decision_outcome=accept 后提交决定。
 
 签发证明、介绍信等任务凭证时，先在 `items` 定义名称和内容，设置 `owner: null`、`category: quest`。签发动作以签发人为目标，启用 `ai_interaction`，含 `{op: item_unissued, item}` 前置条件以及同一 NPC 的 `npc_decision` 和 `{op: issue_item, item, npc}` 效果。NPC 确认同意后，运行时一次记录制作与交付事件，物品归入玩家背包。正式交验使用 `owned_by` 和指定接收人的 `transfer`，后续行动可匹配该动作产生的 `delivered` 证据。凭证通过这些动作流转。
@@ -35,7 +37,7 @@
 
 可选 map：size_km:{width,height}、walking_speed_kmh、routes:[{from,to,distance_km}]。道路双向且连通，运行时生成 travel.<destination> 相邻行动；路程除以速度，向上取整为分钟。地点 position_km 与地图尺寸供未来地图显示使用，实际耗时按道路，不按图片像素。
 
-可选 clock 包含 start_minute、night_minute、home 和 conversation_minutes。海岸示例为 480/1200/home/5，即 08:00 开始、20:00 入夜。家中睡觉需要配置 API Key。夜间整理、计划和选定互动全部处理成功后提交次日，失败留在当晚重试。详见 [地图与时间](../DAY-CYCLE.md)。
+可选 clock 包含 start_minute、night_minute、home 和 conversation_minutes。海岸示例为 480/1200/home/5，即 08:00 开始、20:00 入夜。家中睡觉由运行时完成跨日。模型配置用于可选的夜间摘要和互动，快进或模型失败时仍可按本地规则进入次日。详见 [地图与时间](../DAY-CYCLE.md)。
 
 ## NPC 记忆与 AI
 

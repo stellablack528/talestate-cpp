@@ -82,7 +82,7 @@ class Gameplay(unittest.TestCase):
             game.provider = model
             self.assertEqual(game.engine.state["owners"]["medicine"], "villager")
             game.perform("travel.village")
-            model.plan = {"npc_id": "villager", "action_id": None}
+            model.plan = {"mode": "talk", "npc_id": "villager", "action_id": None}
             game.take_turn("你有什么委托？")
             self.assertEqual(game.engine.state["quests"]["deliver_medicine"], "available")
             self.assertEqual(game.engine.state["owners"]["medicine"], "villager")
@@ -104,6 +104,9 @@ class Gameplay(unittest.TestCase):
             reply_context = model.contexts[-1]
             self.assertNotIn("result_state", reply_context)
             self.assertTrue(any(e["type"] == "quest_completed" for e in reply_context["witnessed_action"]))
+            self.assertTrue(any(e["type"] == "quest_feedback" and e["result"] == "early" and e["npc"] == "keeper"
+                                for e in reply_context["witnessed_action"]))
+            self.assertEqual(reply_context["own_attributes"]["quest_trust"], 1)
             game.save()
             restored = Session.open_save(game.session_dir)
             self.assertEqual(game.snapshot(), restored.snapshot())

@@ -1,6 +1,7 @@
 """One NPC's knowledge projection; no player inventory or global quest context."""
 
 from .memory import witnessed_events
+from .quest_feedback import deadline_label
 
 
 def delivery_recipients(engine, npc_id, context, player_input):
@@ -43,11 +44,20 @@ def role_context(engine, memory, npc_id, events, player_input):
             if accepting_actions and not any(all(engine.condition(c) for c in a.get("preconditions", []) if c["op"] == "day")
                                             for a in accepting_actions):
                 offered = False
-        if not (completed or accepted or offered):
+        outcome = next((event["result"] for event in reversed(evidence)
+                        if event["type"] == "quest_feedback" and event["quest"] == key), None)
+        if not (completed or accepted or offered or outcome):
             continue
+        if outcome and outcome != "overdue":
+            completed = True
         quests.append({"id": key, "title": quest["title"], "description": quest.get("description", ""),
-                       "known_status": "completed" if completed else "active" if accepted else "offered",
+                       "known_status": "completed" if completed else "active" if accepted or outcome else "offered",
+                       "known_feedback": outcome,
                        "giver": quest.get("giver"), "recipient": quest.get("recipient")})
+        if not completed and (accepted or outcome):
+            quests[-1]["deadline"] = deadline_label(engine, quest)
+        elif offered and "deadline_minutes" in quest:
+            quests[-1]["minutes_after_accepting"] = quest["deadline_minutes"]
     items = engine.items
     own_items = [{"id": key, "name": items[key]["name"], "description": items[key].get("description", ""),
                   **({"author": engine.name(items[key]["author"])} if "author" in items[key] else {})}
@@ -61,7 +71,9 @@ def role_context(engine, memory, npc_id, events, player_input):
     from .exchange import shop_stock
     return {"player_input": player_input, "npc": context,
             "clock": {key: clock[key] for key in ("day", "label", "night")},
-            "scene": {"id": location, "name": engine.name(location)}, "visible_people": visible_people,
+            "scene": {"id": location, "name": engine.name(location),
+                      "nearby_places": [engine.name(key) for key, _ in engine.map.neighbors(location)]},
+            "visible_people": visible_people,
             "own_items": own_items, "known_quests": quests, "witnessed_action": current,
             "own_attributes": dict(engine.state["entities"][npc_id]["attributes"]),
             "shop_stock": shop_stock(engine, npc_id),

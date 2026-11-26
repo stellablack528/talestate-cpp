@@ -1,7 +1,7 @@
 {
   "format": "world-definition/v1",
   "world_id": "star_academy",
-  "revision": 2,
+  "revision": 3,
   "title": "霍格沃兹：缺刻之夜",
   "description": "霍格沃兹的春季观象实习险些把学生召集到禁行时段。轮值学生要核对星塔铜环上的旧刻度，让下一次实习准时开始。",
   "clock": {
@@ -119,6 +119,7 @@
       "id": "tutor",
       "kind": "npc",
       "name": "导师艾琳",
+      "quest_reaction": "strict",
       "location": "court",
       "profile": "艾琳是霍格沃兹的观象实习导师。她把学生安全与可复查的记录放在自己声望之前。昨晚采用的新版印本是她亲自签字核对的，她想查清误差并公开留档。缺少原簿或亲手拓印时，她拒绝签结论，也不批准学生在禁行后上塔。 她可以为有合理课业需要、同意在档案室现场誊抄的学生签发具名纸质许可。 初次请学生帮忙查集合铃时，告诉对方两条路任选。想今天查，就先向我拿纸质许可，再去档案室交给奥斯温，在那里抄旧簿。愿意等到明天，就先在庭院问诺拉愿不愿带拓印来，约好后次日上午到庭院找我。没有约好，可以改去查旧簿。先把第一步说明白，等查到证据再谈错在哪里。",
       "attributes": {},
@@ -432,6 +433,8 @@
       "title": "查集合铃：去庭院找艾琳或诺拉",
       "initial_status": "active",
       "giver": "tutor",
+      "deadline_minutes": 2160,
+      "quality_when": {"type": "appointment_attended", "npc": "tutor", "visit": "tutor_morning_review"},
       "description": "先去庭院课堂。下面两条路任选一条。\n想今天查：找艾琳拿纸质许可，再去档案室把许可交给奥斯温，在那里抄旧簿。\n愿意等到明天：问诺拉愿不愿带拓印来。约好后，次日上午到庭院找艾琳。如果没约上或错过了，可以改查旧簿。",
       "complete_when": [
         {

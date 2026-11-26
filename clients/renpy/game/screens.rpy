@@ -385,6 +385,8 @@ screen tale_quests():
                                     vbox:
                                         spacing 7
                                         text quest["title"] size 24 xmaximum 985 substitute False
+                                        if quest["deadline"]:
+                                            text (("已逾期 · " if quest["overdue"] else "") + "期限 " + quest["deadline"]) size 19 color ("#e2ad89" if quest["overdue"] else "#c9ae78") substitute False
                                         if status == "active" and quest["description"] and quest["description"] != quest["title"]:
                                             text quest["description"] size 19 color "#d7d5c7" xmaximum 985 substitute False
 
@@ -446,14 +448,35 @@ screen tale_map():
                         text (str(route["distance_km"]) + " 公里 / " + str(route["minutes"]) + " 分钟") size 17 color "#b9bda8"
             text "亮色标记是当前位置，点击地点查看路线。" size 18 color "#b9bda8"
 
+transform tale_sleep_shade:
+    alpha 0.0
+    linear 0.35 alpha 1.0
+    pause 0.25
+    linear 0.75 alpha 0.8
+
+transform tale_dawn_light:
+    alpha 0.0
+    pause 0.55
+    linear 0.75 alpha 0.55
+
 screen tale_sleep():
     modal True
     zorder 100
-    add Solid("#080b0bea")
+    if tale.sleep_job is not None:
+        timer 0.2 repeat True modal True action Function(tale_tick)
+    add Solid("#080b0bf2") at tale_sleep_shade
+    add Solid("#f0b86a32") at tale_dawn_light
     vbox:
         xalign 0.5 yalign 0.5 spacing 24
-        text "睡觉中……" size 40 color "#e7d7af" xalign 0.5
-        text "夜色笼罩小镇，人们的生活仍在继续。" size 23 color "#b7b19a"
+        text "一夜好眠" size 40 color "#e7d7af" xalign 0.5
+        if tale.sleep_job and not tale.sleep_job.result.done():
+            text ("正在等待夜间见闻……" if tale.sleep_waiting else "你可以等夜间见闻，或快进到早晨。") size 23 color "#e1dac5" xalign 0.5
+        else:
+            text "天边渐渐亮了。" size 23 color "#e1dac5" xalign 0.5
+        hbox:
+            xalign 0.5 spacing 16
+            textbutton "等待" action SetField(tale, "sleep_waiting", True) sensitive not tale.sleep_waiting
+            textbutton "快进到早晨" action Function(tale.fast_forward_sleep)
 
 screen tale_inventory(initial_category="quest"):
     modal True

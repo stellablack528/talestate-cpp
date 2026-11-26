@@ -1,20 +1,32 @@
 """Ren'Py adapter. The engine is the only owner of game state."""
 
+from concurrent.futures import Future
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
 import threading
+from time import monotonic
 
 from talestate import Session
 from talestate.narration import render_event
 from talestate.savegame import list_saves, export_save, import_save
 from talestate.memory import knowledge_text
+from talestate.session import SleepTurn
 
 
 class Settings:
     base_url = "https://api.deepseek.com/v1"
     api_key = ""
     model = "deepseek-flash"
+
+
+@dataclass
+class SleepJob:
+    local_rest: SleepTurn
+    result: Future
+    skip: threading.Event
+    dawn_at: float
 
 
 class Client:
@@ -27,7 +39,8 @@ class Client:
         self.worlds = sorted(path for path in self.worlds_dir.glob("*/world.json"))
         self.status = "选择一个世界，开始旅途。"
         self.busy = False
-        self.sleeping = False
+        self.sleep_job = None
+        self.sleep_waiting = False
         self.pending = None
         self.thread = None
         self.media = {}
@@ -103,8 +116,8 @@ class Client:
     def apply_settings(self):
         if self.session:
             self.session.configure(self.settings.base_url, self.settings.api_key, self.settings.model)
-            self.status = ("模型配置已应用。" if self.session.provider.configured and self.session.provider.api_key
-                           else "请填写 API Key 并应用配置，才能处理整晚事务。")
+            self.status = ("模型配置已应用。" if self.session.provider.configured
+                           else "可直接休息。配置模型后可体验人物对话和夜间见闻。")
 
     def view(self):
         return self.session.view() if self.session else None
@@ -119,9 +132,56 @@ class Client:
     def perform(self, action=None, npc=None):
         if self.busy:
             return
-        self.sleeping = action == "sleep"
+        if action == "sleep":
+            self._begin_sleep()
+            return
         self._background(lambda: self.session.perform(action, npc_id=npc,
                          player_input="交谈" if npc else ""))
+
+    @property
+    def sleeping(self):
+        return self.sleep_job is not None
+
+    def _begin_sleep(self):
+        session = self.session
+        try:
+            rest = session.prepare_sleep()
+        except (ValueError, OSError) as error:
+            self.status = self.error = str(error)
+            return
+
+        job = SleepJob(rest, Future(), threading.Event(), monotonic() + 1.6)
+        self.sleep_job = job
+        self.sleep_waiting = False
+        self.busy = True
+        self.status = self.error = ""
+
+        def work():
+            try:
+                job.result.set_result(session.enrich_sleep(rest, job.skip.is_set))
+            except Exception as error:
+                job.result.set_exception(error)
+
+        self.thread = threading.Thread(target=work, daemon=True)
+        self.thread.start()
+
+    def fast_forward_sleep(self):
+        if self.sleep_job is not None:
+            self._finish_sleep(self.sleep_job)
+
+    def _finish_sleep(self, job):
+        self.sleep_job = None
+        try:
+            if job.result.done():
+                rest = job.result.result()
+            else:
+                job.skip.set()
+                rest = job.local_rest
+            self.session.finish_sleep(rest)
+        except Exception as error:
+            self.status = self.error = str(error)
+        finally:
+            self.busy = False
 
     def submit(self):
         if self.busy or not self.input.strip():
@@ -222,12 +282,16 @@ class Client:
         self.thread.start()
 
     def poll(self):
+        if self.sleep_job is not None:
+            job = self.sleep_job
+            if job.result.done() and monotonic() >= job.dawn_at:
+                self._finish_sleep(job)
+            return
         if self.pending is None:
             return
         ok, result = self.pending
         self.pending = None
         self.busy = False
-        self.sleeping = False
         self.status = "" if ok else result
         self.error = "" if ok else result
         if ok:

@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 
 from .provider import ModelError
+from .quest_feedback import timing_issues
 
 
 # Each alternative must name the object that makes it meaningful.
@@ -102,9 +103,12 @@ def create_delivery_item(engine, state, events, author, recipient, name, descrip
 def offer_dialogue_quest(engine, giver, request, options, accept, follows=None):
     if not isinstance(request, dict):
         raise ModelError("新委托必须是对象或 null。")
+    timing = {field: request[field] for field in ("deadline_minutes", "early_minutes") if field in request}
+    for field, message in timing_issues(timing):
+        raise ModelError(f"新委托的 {field} {message}。")
     kind = request.get("kind")
     if kind == "survey":
-        return offer_survey(engine, giver, request, options["locations"], accept, follows)
+        return offer_survey(engine, giver, request, options["locations"], accept, follows, timing)
     if kind not in ("letter", "parcel"):
         raise ModelError("新委托类型需要是信件、包裹或实地查看。")
     recipient = request.get("recipient")
@@ -121,6 +125,7 @@ def offer_dialogue_quest(engine, giver, request, options, accept, follows=None):
     item = create_delivery_item(engine, state, events, giver, recipient, name, description, kind)
     key = "conversation." + item
     create_errand(state, key, giver, recipient, engine.player, item, title, engine.clock()["day"])
+    state["generated_quests"][key].update(timing)
     return finish_offer(engine, key, events, accept, follows)
 
 
@@ -136,7 +141,7 @@ def pending_quests(engine, giver):
             if quest["giver"] == giver and engine.state["quests"][key] in ("available", "active"))
 
 
-def offer_survey(engine, giver, request, locations, accept, follows):
+def offer_survey(engine, giver, request, locations, accept, follows, timing):
     location = request.get("location")
     if not isinstance(location, str) or location not in locations:
         raise ModelError("查看地点必须是当前可指认的真实地点。")
@@ -153,7 +158,7 @@ def offer_survey(engine, giver, request, locations, accept, follows):
         "id": key, "title": title, "description": description, "giver": giver,
         "survey": {"location": location, "focus": focus}, "initial_status": "available",
         "generated_day": engine.clock()["day"], "complete_when": {"type": "survey_reported", "quest": key},
-        "rewards": []}
+        "rewards": [], **timing}
     state["quests"][key] = "available"
     return finish_offer(engine, key, events, accept, follows)
 

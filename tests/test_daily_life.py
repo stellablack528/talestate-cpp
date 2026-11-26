@@ -313,7 +313,12 @@ class DailyLife(unittest.TestCase):
             with self.assertRaises(ActionError):
                 game.perform(key + ".deliver")
 
-    def test_sleep_stays_on_current_day_until_processing_finishes(self):
+    def test_fast_forward_discards_an_in_flight_night_reply(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("client_sleep", WORLD.parents[1] / "clients/renpy/game/python-packages/talestate_client.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
         started, release = threading.Event(), threading.Event()
 
         class WaitingModel(LifeModel):
@@ -331,23 +336,52 @@ class DailyLife(unittest.TestCase):
             game.perform(npc_id="baker", player_input="你好")
             game.perform("travel.home")
             game.perform("wait_evening")
-            errors = []
-
-            def sleep():
-                try:
-                    game.perform("sleep")
-                except Exception as error:
-                    errors.append(error)
-
-            worker = threading.Thread(target=sleep)
-            worker.start()
+            client = module.Client(WORLD.parents[1] / "clients/renpy")
+            client.session = game
+            client.perform("sleep")
             try:
                 self.assertTrue(started.wait(3))
+                self.assertTrue(client.sleeping)
                 self.assertEqual(game.engine.clock()["day"], 1)
-                state = json.loads((game.session_dir / "session.json").read_text(encoding="utf-8"))["state"]
-                self.assertEqual(state["minute"], 720)
+                client.fast_forward_sleep()
+                client.fast_forward_sleep()
+                self.assertFalse(client.busy)
+                self.assertEqual(game.engine.clock()["day"], 2)
+                committed = game.snapshot()
+                self.assertEqual(Session.open_save(game.session_dir).engine.state, game.engine.state)
             finally:
                 release.set()
-                worker.join(5)
-            self.assertEqual(errors, [])
-            self.assertEqual(game.engine.clock()["day"], 2)
+                client.thread.join(5)
+            self.assertFalse(client.thread.is_alive())
+            client.poll()
+            self.assertEqual(game.snapshot(), committed)
+            self.assertNotIn("night_director", [ctx.get("phase") for ctx in game.provider.contexts])
+
+    def test_invalid_npc_night_reply_cannot_block_morning(self):
+        for malformed, expected in (
+            ({"share_facts": []}, "activity"),
+            ({"activity": "收好货物", "share_facts": ["fact.unknown"]}, "分享事实 ID"),
+        ):
+            with self.subTest(malformed=malformed), tempfile.TemporaryDirectory() as root:
+                class BadNightModel(LifeModel):
+                    def json_reply(self, instructions, context):
+                        if context.get("phase") == "night_participant":
+                            return malformed
+                        return super().json_reply(instructions, context)
+
+                game = Session(WORLD, root)
+                game.provider = BadNightModel()
+                game.provider.social = True
+                game.perform("wait_evening")
+                game.engine.state["night_in_progress"] = True  # A save left by the old sleep flow.
+                game.save()
+                game = Session.open_save(game.session_dir)
+                game.provider = BadNightModel()
+                game.provider.social = True
+                game.perform("sleep")
+                self.assertEqual((game.engine.clock()["day"], game.engine.clock()["label"]), (2, "08:00"))
+                self.assertNotIn("night_in_progress", game.engine.state)
+                self.assertNotIn("npc_encounter", [event["type"] for event in game.engine.state["events"]])
+                reports = sorted((game.session_dir / "diagnostics").glob("*.json"))
+                self.assertEqual(len(reports), 1)
+                self.assertIn(expected, json.loads(reports[0].read_text(encoding="utf-8"))["reason"])

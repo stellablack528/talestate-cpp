@@ -29,6 +29,10 @@ class PermitModel:
             if self.action:
                 assert self.action in {action["id"] for action in context["actions"]}
             return {"action_id": self.action}
+        if context.get("phase") == "nightly":
+            return {"facts": []}
+        if context.get("phase") == "night_director":
+            return {"meetings": [], "visit": "tutor_morning_review"}
         self.role = context
         return {"text": "好。", "activity": "整理手边的册页。",
                 "decision_outcome": "accept" if self.accept else "reject"}
@@ -67,5 +71,22 @@ class AcademyPermit(unittest.TestCase):
             self.assertTrue(any(event["type"] == "delivered" and event["item"] == ITEM
                                 for event in model.role["witnessed_action"]))
             game.perform(COPY)
+            self.assertEqual(game.engine.state["quests"]["read_the_ring"], "completed")
+            self.assertEqual(game.engine.state["quests"]["align_the_tower"], "active")
+
+    def test_guided_review_records_quality_feedback(self):
+        with TemporaryDirectory() as data:
+            game = Session(WORLD, data)
+            model = game.provider = PermitModel()
+            model.accept = True
+            game.perform("travel.court")
+            game.perform("ask_nora")
+            game.perform("travel.dorm")
+            game.perform("wait_evening")
+            game.perform("sleep")
+            game.perform("travel.court")
+            results = game.perform("visit.tutor_morning_review")
+            self.assertTrue(any("认可你有实据、办得扎实" in line["text"] for line in results))
+            self.assertEqual(game.engine.state["entities"]["tutor"]["attributes"]["quest_trust"], 3)
             self.assertEqual(game.engine.state["quests"]["read_the_ring"], "completed")
             self.assertEqual(game.engine.state["quests"]["align_the_tower"], "active")

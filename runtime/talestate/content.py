@@ -4,6 +4,7 @@ import hashlib
 import json
 from .travel import TravelMap
 from .story import alternatives, valid_match
+from .quest_feedback import REACTIONS, timing_issues
 from pathlib import Path
 
 
@@ -37,6 +38,10 @@ def validate_world(world):
     for entity in tables["entities"].values():
         if entity.get("location") not in tables["locations"]:
             error("/entities/" + entity["id"], "实体所在地点不存在")
+        if "quest_reaction" in entity and (
+            entity.get("kind") != "npc" or entity["quest_reaction"] not in tuple(REACTIONS)
+        ):
+            error("/entities/" + entity["id"] + "/quest_reaction", "NPC 反应可选 strict、balanced 或 patient")
         shop = entity.get("shop")
         if shop:
             for key, price in shop.get("prices", {}).items():
@@ -89,6 +94,15 @@ def validate_world(world):
                     or not isinstance(effect.get("clue"), str) or not effect["clue"]):
                 error(path, "调查需要有效调查者、地点和线索 ID")
     for quest in tables["quests"].values():
+        path = "/quests/" + quest["id"]
+        for field, message in timing_issues(quest):
+            error(f"{path}/{field}", message)
+        if "quality_when" in quest:
+            quality = alternatives(quest["quality_when"])
+            if not quality or any(not valid_match(rule) or
+                                  (rule.get("action") is not None and rule["action"] not in tables["actions"])
+                                  for rule in quality):
+                error(path + "/quality_when", "需要有效的质量证据规则")
         if quest.get("initial_status", "active") not in ("available", "active", "completed"):
             error("/quests/" + quest["id"], "任务初始状态需要 available、active 或 completed")
         rules = alternatives(quest.get("complete_when"))
