@@ -1,0 +1,13 @@
+{
+  "agent": "existing art agent",
+  "media_id": "maps.region",
+  "file": "media/maps/coast-map-v1.png",
+  "sha256": "478f22d3d8a075f69346383c7a61009a20f2ea3562751d8b51a4b69e57d54d14",
+  "progress_unchanged": true,
+  "locations": [
+    "home",
+    "village",
+    "lighthouse",
+    "forest"
+  ]
+}

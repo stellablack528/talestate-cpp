@@ -1,0 +1,90 @@
+{
+  "assets": [
+    {
+      "id": "portraits.mage.neutral",
+      "file": "media/portraits/mage/neutral-v1.png",
+      "size": [
+        768,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "6a899d45391cf186095a067be54ca8df010084b34ab71e8e7243f5ac1c980e95"
+    },
+    {
+      "id": "portraits.mage.happy",
+      "file": "media/portraits/mage/happy-v1.png",
+      "size": [
+        768,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "cc6e2171f12c2c1e78a5fdd183ac167419f4265678a4c4aec27d152000a1cdd0"
+    },
+    {
+      "id": "monsters.slime.fire",
+      "file": "media/monsters/slime-fire-v1.png",
+      "size": [
+        768,
+        512
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        253
+      ],
+      "sha256": "a31c3da58821dadaccdfee667b2263d655543c75356d785c2bcec6aedbc71a8e"
+    },
+    {
+      "id": "monsters.slime.water",
+      "file": "media/monsters/slime-water-v1.png",
+      "size": [
+        768,
+        512
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "a6f5ce0a80e297a8a4f4df08f6c1a4ecfeac52677135a5cd830899a211906dc9"
+    },
+    {
+      "id": "monsters.slime.ice",
+      "file": "media/monsters/slime-ice-v1.png",
+      "size": [
+        768,
+        512
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "b8714407abe183f47fbdacdadc091b461fbe469a0629fbd253aeff3470f61d37"
+    },
+    {
+      "id": "monsters.slime.lightning",
+      "file": "media/monsters/slime-lightning-v1.png",
+      "size": [
+        768,
+        512
+      ],
+      "mode": "RGBA",
+      "alpha_range": [
+        0,
+        254
+      ],
+      "sha256": "8d9bae2e43d6d401f8641b5b1acc3a5ede40392cddffbf5c11e6a6163653cc98"
+    }
+  ],
+  "calls": 2,
+  "existing_files_and_manifest_entries_preserved": true
+}

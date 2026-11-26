@@ -1,0 +1,16 @@
+Baseline: b89d7344b6ad9b2f1a32d0fbada5c10ecaf83475 + current local UI/sidebar/test changes.
+No external model requests. A scripted fake provider is used only for the Agent checks.
+Command: python .deployment/audit/run_probe.py
+Probe executable links build/storyforge.lib; world: examples/harbor-lantern.
+
+noop success=1 turn_before=0 turn_after=1 state_equal=0 model_calls=1
+sleep success=1 pending_at=600 current=480 skip_success=0
+promise created=1 fulfill_success=1 inventory_size=0 promise_status=fulfilled
+fact_cap first_128_closed=1 retained=128 request_129_success=0
+time_partition same_time=1 jump_health=80 stepped_health=58 jump_fatigue=100 stepped_fatigue=100
+invented_narration_displayed=1 inventory_size=0
+
+Existing regression suite: python .deployment/test.py
+Result: 87/87 CTest tests passed; exit code 0.
+
+Product source was not modified during this review. Documentation and review probes were added.

@@ -1,0 +1,36 @@
+{
+  "tool": "built-in imagegen",
+  "prompts": {
+    "forest": "Use case: historical-scene. Asset type: 16:9 landscape background for a European medieval storybook RPG. Paint a quiet temperate European woodland clearing reached by a narrow dirt footpath branching from a coastal village, ancient oak and beech trees, ferns, mossy roots, scattered fallen leaves, soft mist and pale overcast sunlight between branches. Restrained realistic painted storybook illustration, detailed organic textures, muted forest greens and warm earth, consistent with a medieval European coastal game. Eye-level wide establishing view, open walkable clearing in center and lower foreground for a turn-based encounter interface. No people, no creatures, no buildings, no weapons, no text, no UI, no borders, no modern objects. Deliver a finished wide 16:9 image.",
+    "slime": "Use case: stylized-concept. Asset type: single enemy sprite for a medieval European painted storybook RPG. One small translucent moss-green slime creature, a squat soft gelatinous mound with a slightly irregular rounded silhouette, subtle inner light and tiny embedded bubbles, two simple dark bead-like eyes, mild curious expression, no teeth, no accessories, no carried items. Three-quarter view at ground level, full creature entirely in frame, generous empty padding. Polished realistic hand-painted fantasy storybook illustration, muted forest colors and soft diffuse lighting, natural wet jelly texture. Isolated subject on a genuinely transparent background with alpha, no scene, no floor, no opaque backdrop, no checkerboard drawn in, no text or UI. One slime only."
+  },
+  "assets": [
+    {
+      "kind": "backgrounds",
+      "id": "forest",
+      "file": "media/backgrounds/forest-medieval-v1.png",
+      "size": [
+        1672,
+        941
+      ],
+      "mode": "RGB",
+      "alpha": null,
+      "sha256": "37574897b82c73738ad61e570d3562640708748851659a5c8751c752acf142a2"
+    },
+    {
+      "kind": "monsters",
+      "id": "slime",
+      "file": "media/monsters/slime-v1.png",
+      "size": [
+        1536,
+        1024
+      ],
+      "mode": "RGBA",
+      "alpha": [
+        0,
+        254
+      ],
+      "sha256": "422cf3a29a883568ca5e133c66c825a9a210494923fc43eadd3366a0ac1443e2"
+    }
+  ]
+}
