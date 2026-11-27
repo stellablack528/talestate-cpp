@@ -74,6 +74,7 @@ screen tale_game():
             text ("攻击  " + str(v["stats"]["attack"]) + "     防御  " + str(v["stats"]["defense"])) size 20 color "#d2c6a9"
             text ("法术强度  " + str(v["stats"]["magic_attack"])) size 20 color "#b7cce1"
             text ("金币  " + str(v["player"]["attributes"].get("coins", 0))) size 20 color "#d2c6a9"
+            text ("荣誉  " + str(v["player"]["attributes"].get("honor", 0))) size 20 color "#d2c6a9"
             add Solid("#a68c5144") ysize 1
             text v["location"]["name"] size 21 substitute False
             if not v["clock"]["at_home"]:
@@ -156,7 +157,7 @@ screen tale_game():
             hbox:
                 spacing 10
                 for action in v["actions"]:
-                    if not action.get("ai_interaction") and not action["id"].startswith(("combat.start.", "combat.cast.", "combat.use.")):
+                    if not action.get("ai_interaction") and action["intent"] != "use" and not action["id"].startswith(("combat.start.", "combat.cast.", "combat.use.")):
                         $ label = action["name"]
                         if action["intent"] == "move":
                             $ label += "  " + str(action["distance_km"]) + "km / " + str(action["duration_minutes"]) + "分钟"
@@ -372,6 +373,7 @@ screen tale_quests():
                 spacing 16
                 textbutton "未完成" action SetScreenVariable("status", "active") selected status == "active"
                 textbutton "已完成" action SetScreenVariable("status", "completed") selected status == "completed"
+                textbutton "未达成" action SetScreenVariable("status", "failed") selected status == "failed"
             viewport:
                 ysize 540 mousewheel True draggable True scrollbars "vertical"
                 vbox:
@@ -389,6 +391,10 @@ screen tale_quests():
                                             text (("已逾期 · " if quest["overdue"] else "") + "期限 " + quest["deadline"]) size 19 color ("#e2ad89" if quest["overdue"] else "#c9ae78") substitute False
                                         if status == "active" and quest["description"] and quest["description"] != quest["title"]:
                                             text quest["description"] size 19 color "#d7d5c7" xmaximum 985 substitute False
+                                        if status == "failed":
+                                            text ("已向委托人说明。" if quest["disclosed"] else quest["description"]) size 19 color "#e2ad89" xmaximum 985 substitute False
+                                        if quest["closing"]:
+                                            text quest["closing"] size 19 color "#d7d5c7" xmaximum 985 substitute False
 
 screen tale_map():
     modal True
@@ -520,6 +526,8 @@ screen tale_inventory(initial_category="quest"):
                                                 textbutton ("卸下" if item["equipped"] else "装备") action Function(tale.equip, item["id"], item["equipped"]) sensitive not tale.busy and not v["combat"]
                                         if item.get("consumable"):
                                             textbutton "使用" action Function(tale.use_item, item["id"]) sensitive item["usable"] and not tale.busy
+                                        elif item["errand_usable"]:
+                                            textbutton "在此使用" action Function(tale.use_item, item["id"]) sensitive not tale.busy
                 vbox:
                     xsize 300 spacing 20
                     text "角色属性" size 25 color "#d4b87d"

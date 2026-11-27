@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 from .engine import ActionError
-from .story import quest_items
+from .story import alternatives, quest_items, record_entrusted_loss
 
 
 def prices(engine, npc_id):
@@ -48,10 +48,18 @@ def quote(engine, npc_id, proposal):
             raise ActionError("交换物品不属于当前持有人。")
     if set(receive) & reserved_items(engine):
         raise ActionError("对方的委托或约定物品需要按原约定取得。")
-    errands = engine.state.get("generated_quests", {})
-    delivery_items = quest_items(quest for key, quest in errands.items() if engine.state["quests"][key] == "active")
-    if set(give) & (issued_quest_items(engine) | delivery_items):
-        raise ActionError("这件委托物品需要交给指定的接收人。")
+    affected = {key: set(give) & quest_items((quest,)) for key, quest in engine.quests.items()
+                if engine.state["quests"][key] == "active"}
+    affected = {key: items for key, items in affected.items() if items}
+    restricted = set(give) & issued_quest_items(engine)
+    if affected or restricted:
+        if coins >= 0 or receive:
+            raise ActionError("受托物品请按委托使用或交付。若要擅自卖掉，需要明确以金币单独成交。")
+        for key, items in affected.items():
+            quest = engine.quests[key]
+            if any(rule.get("type") == "delivered" and rule["item"] in items and rule["to"] == npc_id
+                   for rule in alternatives(quest["complete_when"])):
+                raise ActionError("对方是约定的接收人，请按原委托交付。")
     for entity, cost in ((engine.player, coins), (npc_id, -coins)):
         if engine.state["entities"][entity]["attributes"].get("coins", 0) < cost:
             raise ActionError("金币不足，交换尚未发生。")
@@ -63,7 +71,8 @@ def quote(engine, npc_id, proposal):
         value = sum(engine.items[key].get("barter_value", 0) for key in give)
         if coins + value < sum(catalog[key] for key in receive):
             raise ActionError("提出的金币与物品价值不足以购买这些货物。")
-    return {"give": give, "receive": receive, "coins": coins}
+    return {"give": give, "receive": receive, "coins": coins,
+            "entrusted": sorted(restricted.union(*affected.values()))}
 
 
 def execute_exchange(engine, npc_id, proposal):
@@ -78,6 +87,10 @@ def execute_exchange(engine, npc_id, proposal):
         for entity, amount in ((engine.player, -offer["coins"]), (npc_id, offer["coins"])):
             engine._effect(state, events, {"op": "add_attribute", "entity": entity,
                            "attribute": "coins", "amount": amount}, action)
+    if offer["entrusted"]:
+        sold = offer["entrusted"]
+        proof = engine._event(state, events, "entrusted_items_sold", npc=npc_id, items=sold, action=action)
+        record_entrusted_loss(engine, state, events, sold, proof)
     engine._complete_quests(state, events)
     state["turn"] += 1
     state["events"].extend(events)

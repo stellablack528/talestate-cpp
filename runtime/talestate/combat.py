@@ -26,6 +26,8 @@ def damage(attack, defense):
 
 def inventory(engine):
     quest_goods = quest_items(engine.quests.values())
+    use_actions = {action["item"] for action in engine.available_actions()
+                   if action["intent"] == "use" and "item" in action}
     rows = []
     for key, owner in engine.state["owners"].items():
         if owner != engine.player:
@@ -35,6 +37,7 @@ def inventory(engine):
         row["equipped"] = key in engine.state.get("equipment", {}).values()
         from .magic import can_use
         row["usable"] = can_use(engine, key)
+        row["errand_usable"] = key in use_actions
         rows.append(row)
     return rows
 

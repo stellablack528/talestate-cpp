@@ -36,6 +36,7 @@ def role_context(engine, memory, npc_id, events, player_input):
         if engine.state["quests"].get(key) == "expired":
             continue
         completed = any(e["type"] == "quest_completed" and e["quest"] == key for e in evidence)
+        failed = any(e["type"] == "quest_failure_disclosed" and e["quest"] == key for e in evidence)
         accepted = any(e["type"] == "quest_accepted" and e["quest"] == key for e in evidence)
         offered = quest.get("giver") == npc_id and not quest.get("hidden_until_active")
         if offered:
@@ -46,15 +47,16 @@ def role_context(engine, memory, npc_id, events, player_input):
                 offered = False
         outcome = next((event["result"] for event in reversed(evidence)
                         if event["type"] == "quest_feedback" and event["quest"] == key), None)
-        if not (completed or accepted or offered or outcome):
+        if not (completed or failed or accepted or offered or outcome):
             continue
-        if outcome and outcome != "overdue":
+        if outcome in ("early", "quality", "on_time", "late"):
             completed = True
+        status = "failed" if failed else "completed" if completed else "active" if accepted or outcome else "offered"
         quests.append({"id": key, "title": quest["title"], "description": quest.get("description", ""),
-                       "known_status": "completed" if completed else "active" if accepted or outcome else "offered",
+                       "known_status": status,
                        "known_feedback": outcome,
                        "giver": quest.get("giver"), "recipient": quest.get("recipient")})
-        if not completed and (accepted or outcome):
+        if status == "active":
             quests[-1]["deadline"] = deadline_label(engine, quest)
         elif offered and "deadline_minutes" in quest:
             quests[-1]["minutes_after_accepting"] = quest["deadline_minutes"]

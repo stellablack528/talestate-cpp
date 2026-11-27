@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from unicodedata import name as unicode_name
 from .travel import TravelMap
 from .story import alternatives, valid_match
 from .quest_feedback import REACTIONS, timing_issues
@@ -35,6 +36,8 @@ def validate_world(world):
                 tables[section][row["id"]] = row
     if len([e for e in tables["entities"].values() if e.get("kind") == "player"]) != 1:
         error("/entities", "首版世界需要一个玩家实体")
+    if "npc_naming" in world:
+        validate_npc_names(world["npc_naming"], tables["entities"], error)
     for entity in tables["entities"].values():
         if entity.get("location") not in tables["locations"]:
             error("/entities/" + entity["id"], "实体所在地点不存在")
@@ -167,6 +170,41 @@ def validate_world(world):
         if type(row.get("reward_coins", 0)) is not int or row.get("reward_coins", 0) < 0:
             error("/encounters", "怪物金币奖励需为非负整数")
     return errors
+
+
+def validate_npc_names(policy, entities, error):
+    path = "/npc_naming"
+    if not isinstance(policy, dict):
+        error(path, "命名规则需要是对象。")
+        return
+    fixed, blocked = policy.get("fixed_names", {}), policy.get("forbidden_names", [])
+    script = policy.get("script", "any")
+    if (not isinstance(policy.get("style", ""), str) or script not in ("any", "han", "latin")
+            or not isinstance(fixed, dict) or not isinstance(blocked, list)
+            or not all(isinstance(value, str) and value.strip() for value in [*fixed.values(), *blocked])):
+        error(path, "需要命名说明、有效文字体系、固定名称表和禁用名称列表。")
+        return
+    npcs = {key: entity for key, entity in entities.items() if entity.get("kind") == "npc"}
+    for key in fixed.keys() - npcs.keys():
+        error(path + "/fixed_names/" + key, "指定名称对应的 NPC 缺失。")
+    seen = set()
+    blocked = {word.strip().casefold() for word in blocked}
+    for key, npc in npcs.items():
+        label = npc.get("name")
+        field = "/entities/" + key + "/name"
+        if not isinstance(label, str) or not label.strip():
+            error(field, "NPC 需要名称。")
+            continue
+        normalized = label.strip().casefold()
+        if normalized in seen or normalized in blocked:
+            error(field, "NPC 名称重复或出现在禁用名单中。")
+        if key in fixed and label != fixed[key]:
+            error(field, f"作者指定的名称为「{fixed[key]}」。")
+        letters = [unicode_name(char, "") for char in label if char.isalpha()]
+        prefix = {"han": "CJK ", "latin": "LATIN "}.get(script)
+        if prefix and (not letters or any(not letter.startswith(prefix) for letter in letters)):
+            error(field, f"名称不符合指定的文字体系 {script}。")
+        seen.add(normalized)
 
 
 def _check_operation(operation, tables, path, error, condition=False):

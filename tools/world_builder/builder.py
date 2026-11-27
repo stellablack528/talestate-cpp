@@ -16,6 +16,12 @@ ROOT = Path(__file__).resolve().parents[2]
 FORMAT = "world-definition/v1"
 DRAFT_FORMAT = "world-builder-draft/v1"
 DEFAULT_MODEL = "deepseek-flash"
+MEDIEVAL_NAME_REFERENCE = (
+    "参考：乔叟《坎特伯雷故事集·总序》https://www.gutenberg.org/files/2383/2383-h/2383-h.htm\n"
+    "提炼可用命名规律：旅人可用职衔、行业或籍贯作公开称呼。比如以行业区分磨坊主和商人，"
+    "以身份区分骑士和随从，以来处区分某地旅人。城镇平民与贵族在称谓上应有区别。"
+    "仅借鉴称谓构造，按本世界文化及译名生成原创人物。"
+)
 ID = re.compile(r"^[a-z][a-z0-9_-]*$")
 CONDITIONS = {"at", "owned_by", "quest_status", "attribute", "day", "evidence", "item_unissued"}
 EFFECTS = {"move", "transfer", "add_attribute", "activate_quest", "consume", "investigate", "npc_decision", "issue_item"}
@@ -165,6 +171,7 @@ def _prompt() -> str:
 
 def generate(sources: list[dict], *, base_url: str | None = None, model: str | None = None,
              api_key: str | None = None, world_id: str | None = None,
+             npc_naming: dict | None = None, naming_references: str = "",
              revision: int = 1, timeout: float = 120) -> dict:
     """One model request using original sources; no lossy summary or hidden retry loop."""
     base_url = base_url or os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -175,9 +182,14 @@ def generate(sources: list[dict], *, base_url: str | None = None, model: str | N
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": _prompt()},
+            {"role": "system", "content": _prompt() +
+             "\nNPC names must follow the source world's culture, time period and translation conventions. "
+             "npc_naming is the author's authoritative naming policy; fixed_names maps stable NPC IDs to exact names. "
+             "Use naming_references only to infer naming patterns and titles when relevant to the world and character. "
+             "Create original characters. Do not import references as world facts or copy their casts."},
             {"role": "user", "content": json.dumps({"sources": sources, "world_id": world_id,
-                                                      "revision": revision}, ensure_ascii=False)}
+                                                      "revision": revision, "npc_naming": npc_naming,
+                                                      "naming_references": naming_references}, ensure_ascii=False)}
         ],
         "response_format": {"type": "json_object"},
         "max_tokens": 12000
@@ -198,11 +210,14 @@ def generate(sources: list[dict], *, base_url: str | None = None, model: str | N
     if world_id:
         proposed["definition"]["world_id"] = world_id
     proposed["definition"]["revision"] = revision
+    if npc_naming is not None:
+        proposed["definition"]["npc_naming"] = copy.deepcopy(npc_naming)
     return {
         "format": DRAFT_FORMAT, "sources": copy.deepcopy(sources),
         "requirements": proposed.get("requirements", []),
         "definition": proposed["definition"], "npc_seeds": proposed.get("npc_seeds", {}),
-        "generation": {"mode": "model", "model": model, "usage": result.get("usage", {})}
+        "generation": {"mode": "model", "model": model, "usage": result.get("usage", {})},
+        **({"naming_references": naming_references} if naming_references else {}),
     }
 
 

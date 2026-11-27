@@ -3,7 +3,10 @@
 from copy import deepcopy
 from .quest_feedback import reward_feedback
 from .travel import TravelMap
-from .story import alternatives, matches, visit_actions, issue_receipt, survey_action, survey_record
+from .story import (
+    alternatives, change_honor, issue_receipt, matches, quest_items, record_entrusted_loss,
+    survey_action, survey_record, use_actions, use_record, visit_actions,
+)
 
 
 class ActionError(ValueError):
@@ -31,7 +34,7 @@ class Engine:
         self._discover(self.state)
         attributes = self.state["entities"][self.player]["attributes"]
         for key, value in {"health": 100, "max_health": 100, "attack": 5, "defense": 5,
-                           "mana": 50, "max_mana": 50, "magic_attack": 8}.items():
+                           "mana": 50, "max_mana": 50, "magic_attack": 8, "honor": 0}.items():
             attributes.setdefault(key, value)
         from .combat import reset_enemies
         reset_enemies(self, self.state, 1)
@@ -105,6 +108,13 @@ class Engine:
         actions.extend(visit_actions(self))
         present = self.present_npcs()
         location = self.state["entities"][self.player]["location"]
+        for key, quest in self.quests.items():
+            giver = quest.get("giver")
+            if (self.state["quests"][key] == "failed" and giver in present
+                    and not self.state.get("disclosed_failures", {}).get(key)):
+                actions.append({"id": "disclose." + key, "name": "向" + self.name(giver) + "说明未能完成：" + quest["title"],
+                                "intent": "disclose", "actor": self.player, "target": giver, "ai_interaction": True,
+                                "duration_minutes": 5, "effects": [{"op": "disclose_failure", "quest": key}]})
         for npc_id in present:
             for course in lessons(self, npc_id):
                 if not course["learned"]:
@@ -114,6 +124,9 @@ class Engine:
         for key, quest in self.state.get("generated_quests", {}).items():
             status = self.state["quests"][key]
             if status not in ("available", "active"):
+                continue
+            if "use_at" in quest:
+                actions.extend(use_actions(self, quest, status, location, present))
                 continue
             if "survey" in quest:
                 action = survey_action(self, quest, status, location, present)
@@ -197,6 +210,13 @@ class Engine:
         elif op == "consume":
             from .magic import consume_effect
             consume_effect(self, state, events, effect["item"], effect["entity"])
+            item = effect["item"]
+            if effect["entity"] == self.player and any(
+                state["quests"][key] == "active" and item in quest_items((quest,))
+                and not any(matches(events[-1], rule) for rule in alternatives(quest["complete_when"]))
+                for key, quest in self.quests.items()
+            ):
+                record_entrusted_loss(self, state, events, [item], events[-1])
         elif op == "add_attribute":
             attributes = state["entities"][effect["entity"]]["attributes"]
             key = effect["attribute"]
@@ -236,6 +256,28 @@ class Engine:
                            else survey_record(self, quest["id"])["observation"])
             self._event(state, events, event_type, quest=quest["id"], npc=quest["giver"], action=action,
                         observation=observation, **quest["survey"])
+        elif op in ("use_errand_item", "report_errand_use"):
+            quest = self.quests[effect["quest"]]
+            key, item = quest["id"], quest["item"]
+            if op == "use_errand_item":
+                location = quest["use_at"]["location"]
+                if state["owners"].get(item) != self.player or state["entities"][self.player]["location"] != location:
+                    raise ActionError("需要持有这件道具，并在委托指定的地点使用。")
+                del state["owners"][item]
+                self._event(state, events, "errand_item_used", quest=key, item=item, action=action,
+                            location=location, purpose=quest["use_at"]["purpose"])
+            else:
+                evidence = use_record(self, key)
+                self._event(state, events, "errand_reported", quest=key, npc=quest["giver"], action=action,
+                            evidence_id=evidence["event_id"], purpose=evidence["purpose"])
+        elif op == "disclose_failure":
+            from .quest_feedback import feedback
+            key = effect["quest"]
+            quest = self.quests[key]
+            giver = quest["giver"]
+            state.setdefault("disclosed_failures", {})[key] = True
+            self._event(state, events, "quest_failure_disclosed", quest=key, npc=giver, action=action)
+            feedback(self, state, events, quest, giver, "breached")
         elif op == "attend_visit":
             key = effect["visit"]
             row = state["visits"][key]
@@ -303,7 +345,12 @@ class Engine:
             if proof is None:
                 continue
             candidate["quests"][key] = "completed"
-            self._event(candidate, events, "quest_completed", quest=key, evidence_id=proof["event_id"])
+            closing = {"closing": quest["closing"]} if quest.get("closing") else {}
+            self._event(candidate, events, "quest_completed", quest=key, evidence_id=proof["event_id"], **closing)
+            if key in candidate.get("generated_quests", {}) or (
+                proof["type"] == "delivered" and proof["from"] == self.player and quest.get("giver")
+            ):
+                change_honor(self, candidate, events, 1, proof)
             reward_feedback(self, candidate, events, quest, proof)
             for reward in quest.get("rewards", []):
                 self._effect(candidate, events, reward, proof.get("action", "exchange"))

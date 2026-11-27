@@ -1,6 +1,7 @@
 """Runtime-owned evidence, short visits and generated correspondence."""
 
 from collections.abc import Mapping
+from math import isfinite
 
 from .provider import ModelError
 from .quest_feedback import timing_issues
@@ -22,8 +23,41 @@ def alternatives(rule):
 
 
 def quest_items(quests):
-    return {rule["item"] for quest in quests for rule in alternatives(quest["complete_when"])
-            if rule.get("type") == "delivered"}
+    result = {rule["item"] for quest in quests for rule in alternatives(quest["complete_when"])
+              if rule.get("type") == "delivered"}
+    result.update(quest["item"] for quest in quests if "use_at" in quest)
+    return result
+
+
+def change_honor(engine, state, events, amount, proof):
+    attributes = state["entities"][engine.player]["attributes"]
+    before = attributes.get("honor", 0)
+    value = max(-100, min(100, before + amount))
+    attributes["honor"] = value
+    if value != before:
+        engine._event(state, events, "honor_changed", amount=value - before, value=value,
+                      evidence_id=proof["event_id"])
+
+
+def record_entrusted_loss(engine, state, events, items, proof):
+    previous_losses = {item for event in state["events"] if event["type"] == "entrusted_items_sold"
+                       for item in event["items"]}
+    previous_losses.update(event["item"] for event in state["events"]
+                           if event["type"] == "consumed" and event["entity"] == engine.player)
+    losses = previous_losses.union(items)
+    for key, quest in engine.quests.items():
+        if state["quests"][key] != "active":
+            continue
+        required = [rule["item"] if rule["type"] == "delivered" else None
+                    for rule in alternatives(quest["complete_when"])]
+        if "use_at" in quest:
+            required = [quest["item"]]
+        if any(item in items for item in required) and all(
+            item in losses and state["owners"].get(item) != engine.player for item in required
+        ):
+            state["quests"][key] = "failed"
+            engine._event(state, events, "quest_failed", quest=key, evidence_id=proof["event_id"])
+    change_honor(engine, state, events, -3, proof)
 
 
 def valid_match(rule):
@@ -109,8 +143,10 @@ def offer_dialogue_quest(engine, giver, request, options, accept, follows=None):
     kind = request.get("kind")
     if kind == "survey":
         return offer_survey(engine, giver, request, options["locations"], accept, follows, timing)
+    if kind == "use":
+        return offer_use(engine, giver, request, options["locations"], accept, follows, timing)
     if kind not in ("letter", "parcel"):
-        raise ModelError("新委托类型需要是信件、包裹或实地查看。")
+        raise ModelError("新委托类型需要是信件、包裹、实地查看或现场使用。")
     recipient = request.get("recipient")
     if not isinstance(recipient, str) or recipient not in options["recipients"]:
         raise ModelError("新委托的接收人必须是该人物可以指认的 NPC。")
@@ -125,7 +161,8 @@ def offer_dialogue_quest(engine, giver, request, options, accept, follows=None):
     item = create_delivery_item(engine, state, events, giver, recipient, name, description, kind)
     key = "conversation." + item
     create_errand(state, key, giver, recipient, engine.player, item, title, engine.clock()["day"])
-    state["generated_quests"][key].update(timing)
+    instructions = f"把{name}交给{engine.name(recipient)}。"
+    state["generated_quests"][key].update(timing, **errand_details(request, instructions))
     return finish_offer(engine, key, events, accept, follows)
 
 
@@ -139,6 +176,12 @@ def quest_text(request, field, limit):
 def pending_quests(engine, giver):
     return (quest for key, quest in engine.state.get("generated_quests", {}).items()
             if quest["giver"] == giver and engine.state["quests"][key] in ("available", "active"))
+
+
+def errand_details(request, description):
+    return {"description": quest_text(request, "motive", 240) + " " + description
+            if "motive" in request else description,
+            **({"closing": quest_text(request, "closing", 160)} if "closing" in request else {})}
 
 
 def offer_survey(engine, giver, request, locations, accept, follows, timing):
@@ -155,12 +198,63 @@ def offer_survey(engine, giver, request, locations, accept, follows, timing):
     event["quest"] = key
     description = f"去{engine.name(location)}查看：{focus}。之后回来告诉{engine.name(giver)}。"
     state.setdefault("generated_quests", {})[key] = {
-        "id": key, "title": title, "description": description, "giver": giver,
+        "id": key, "title": title, "giver": giver, **errand_details(request, description),
         "survey": {"location": location, "focus": focus}, "initial_status": "available",
         "generated_day": engine.clock()["day"], "complete_when": {"type": "survey_reported", "quest": key},
         "rewards": [], **timing}
     state["quests"][key] = "available"
     return finish_offer(engine, key, events, accept, follows)
+
+
+def offer_use(engine, giver, request, locations, accept, follows, timing):
+    location = request.get("location")
+    if not isinstance(location, str) or location not in locations:
+        raise ModelError("道具使用地点必须是该人物能指认的真实地点。")
+    current = engine.state["entities"][engine.player]["location"]
+    if not isfinite(engine.map.distance(current, location)):
+        raise ModelError("道具使用地点必须可从此处抵达。")
+    name, title = quest_text(request, "name", 36), quest_text(request, "title", 80)
+    purpose = quest_text(request, "purpose", 100)
+    if any(q.get("use_at") == {"location": location, "purpose": purpose} for q in pending_quests(engine, giver)):
+        raise ModelError("已有同一地点和用途的未结委托。")
+    state, events = engine.state, []
+    item = create_delivery_item(engine, state, events, giver, giver, name,
+                                quest_text(request, "description", 500), "tool")
+    key = "use_errand." + item
+    description = f"在{engine.name(location)}使用{name}：{purpose}。完成后回去找{engine.name(giver)}。"
+    state.setdefault("generated_quests", {})[key] = {
+        "id": key, "title": title, "giver": giver, "item": item, **errand_details(request, description),
+        "use_at": {"location": location, "purpose": purpose}, "initial_status": "available",
+        "generated_day": engine.clock()["day"], "complete_when": {"type": "errand_reported", "quest": key},
+        "rewards": [], **timing}
+    state["quests"][key] = "available"
+    return finish_offer(engine, key, events, accept, follows)
+
+
+def use_record(engine, key):
+    return next((event for event in reversed(engine.state["events"])
+                 if event["type"] == "errand_item_used" and event["quest"] == key), None)
+
+
+def use_actions(engine, quest, status, location, present):
+    key, giver, item = quest["id"], quest["giver"], quest["item"]
+    action = {"actor": engine.player, "duration_minutes": 5, "description": quest["description"],
+              "item": item}
+    owner = engine.state["owners"].get(item)
+    if status == "available" and giver in present and owner == giver:
+        return [{**action, "id": key + ".accept", "name": "接下：" + quest["title"],
+                 "intent": "accept", "target": giver, "ai_interaction": True,
+                 "effects": [{"op": "transfer", "item": item, "from": giver, "to": engine.player},
+                             {"op": "activate_quest", "quest": key}]}]
+    if status == "active" and use_record(engine, key):
+        if giver in present:
+            return [{**action, "id": key + ".report", "name": "向" + engine.name(giver) + "汇报用物结果",
+                     "intent": "report", "target": giver, "ai_interaction": True,
+                     "effects": [{"op": "report_errand_use", "quest": key}]}]
+    elif status == "active" and location == quest["use_at"]["location"] and owner == engine.player:
+        return [{**action, "id": key + ".use", "name": "使用" + engine.name(item) + "：" + quest["use_at"]["purpose"],
+                 "intent": "use", "target": location, "effects": [{"op": "use_errand_item", "quest": key}]}]
+    return []
 
 
 def finish_offer(engine, key, events, accept, follows):
