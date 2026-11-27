@@ -18,6 +18,8 @@ def main() -> int:
     gen.add_argument("--base-url")
     gen.add_argument("--model")
     gen.add_argument("--world-id")
+    gen.add_argument("--npc-naming", type=Path, help="JSON naming policy for this world")
+    gen.add_argument("--naming-reference", type=Path, action="append", default=[], help="UTF-8 naming reference text; repeat for multiple documents")
     gen.add_argument("--revision", type=int, default=1)
     gen.add_argument("--timeout", type=float, default=120)
     comp = commands.add_parser("compile", help="Compile an edited draft without model access")
@@ -37,8 +39,8 @@ def main() -> int:
     try:
         if args.command == "generate":
             if args.preview:
-                if args.source:
-                    parser.error("--preview is a fixed example; omit --source")
+                if args.source or args.npc_naming or args.naming_reference:
+                    parser.error("--preview uses a fixed world and cannot take source or naming inputs")
                 result = preview()
                 if args.world_id:
                     result["definition"]["world_id"] = args.world_id
@@ -49,7 +51,9 @@ def main() -> int:
                 # Keep original input before the network call, including if interrupted.
                 write_json(args.out.with_suffix(".sources.json"), {"sources": sources})
                 result = generate(sources, base_url=args.base_url, model=args.model,
-                                  world_id=args.world_id, revision=args.revision, timeout=args.timeout)
+                                  world_id=args.world_id, revision=args.revision, timeout=args.timeout,
+                                  npc_naming=read_json(args.npc_naming) if args.npc_naming else None,
+                                  naming_references="\n\n".join(p.read_text(encoding="utf-8-sig") for p in args.naming_reference))
             write_json(args.out, result)
             print(json.dumps({"draft": str(args.out), "generation": result["generation"]}, ensure_ascii=False))
         elif args.command == "compile":

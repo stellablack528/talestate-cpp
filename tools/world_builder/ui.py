@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
-from .builder import DEFAULT_MODEL, ROOT, compile, export, generate, preview, read_json, write_json
+from .builder import DEFAULT_MODEL, MEDIEVAL_NAME_REFERENCE, ROOT, compile, export, generate, preview, read_json, write_json
 
 
 class WorldBuilderWindow(ttk.Frame):
@@ -63,6 +63,15 @@ class WorldBuilderWindow(ttk.Frame):
         self.source.pack(fill="both", expand=True)
         self.draft = ScrolledText(draft_tab, wrap="none", undo=True, font=("Consolas", 11))
         self.draft.pack(fill="both", expand=True)
+        names_tab = ttk.Frame(self.tabs, padding=8)
+        self.tabs.add(names_tab, text="NPC 命名与参考")
+        ttk.Label(names_tab, text='命名规则（可留空）。支持 style、script（any / han / latin）、fixed_names 和 forbidden_names。').pack(anchor="w")
+        self.naming = ScrolledText(names_tab, wrap="word", undo=True, height=5)
+        self.naming.pack(fill="x")
+        ttk.Label(names_tab, text="文学参考（可选）。可粘贴作者摘记、命名习惯和出处，会随生成请求发送。").pack(anchor="w", pady=(10, 4))
+        self.naming_references = ScrolledText(names_tab, wrap="word", undo=True, height=8)
+        self.naming_references.pack(fill="both", expand=True)
+        self._button(names_tab, "加入中世纪参考示例", self.add_naming_reference)
         bottom = ttk.Frame(self)
         bottom.pack(fill="x", pady=(8, 0))
         self._button(bottom, "检查草案", self.check_draft)
@@ -115,6 +124,11 @@ class WorldBuilderWindow(ttk.Frame):
         self.tabs.select(0)
         self.status.set(f"已导入 {len(paths)} 份设定，可继续编辑原文。")
 
+    def add_naming_reference(self):
+        current = self.naming_references.get("1.0", "end-1c").strip()
+        if MEDIEVAL_NAME_REFERENCE not in current:
+            self.naming_references.insert("end", ("\n\n" if current else "") + MEDIEVAL_NAME_REFERENCE)
+
     def load_example(self):
         if not self._may_replace_draft():
             return
@@ -134,6 +148,11 @@ class WorldBuilderWindow(ttk.Frame):
         self._show_draft(value)
         self.source.delete("1.0", "end")
         self.source.insert("1.0", "\n\n".join(s["text"] for s in value.get("sources", [])))
+        self.naming.delete("1.0", "end")
+        if "npc_naming" in value["definition"]:
+            self.naming.insert("1.0", json.dumps(value["definition"]["npc_naming"], ensure_ascii=False, indent=2))
+        self.naming_references.delete("1.0", "end")
+        self.naming_references.insert("1.0", value.get("naming_references", ""))
         self.status.set("已打开：" + path)
 
     def save_draft(self):
@@ -160,8 +179,11 @@ class WorldBuilderWindow(ttk.Frame):
         if not self._may_replace_draft():
             return
         # Capture all Tk values on the main thread; the worker only calls the API.
+        policy = self.naming.get("1.0", "end-1c").strip()
         kwargs = dict(base_url=self.base_url.get().strip(), model=self.model.get().strip(),
-                      api_key=self.api_key.get(), world_id=self.world_id.get().strip() or None)
+                      api_key=self.api_key.get(), world_id=self.world_id.get().strip() or None,
+                      npc_naming=json.loads(policy) if policy else None,
+                      naming_references=self.naming_references.get("1.0", "end-1c").strip())
         self._set_busy(True)
         self.status.set("模型生成中……窗口保持响应；请求最多等待 120 秒。")
 

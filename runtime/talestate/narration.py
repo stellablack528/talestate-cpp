@@ -25,12 +25,25 @@ def render_event(engine, event):
         return f"在{engine.name(event['location'])}查看了「{event['focus']}」。" + (f"\n现场：{observed}" if observed else "")
     if kind == "survey_reported":
         return f"向{engine.name(event['npc'])}汇报了查看结果。"
+    if kind == "errand_item_used":
+        return f"你在{engine.name(event['location'])}使用了{engine.name(event['item'])}。可以回去汇报了。"
+    if kind == "errand_reported":
+        return f"向{engine.name(event['npc'])}汇报了道具的使用结果。"
+    if kind == "quest_failure_disclosed":
+        return f"你向{engine.name(event['npc'])}说明了委托没能完成。"
+    if kind == "entrusted_items_sold":
+        return "你把受托物品卖给了" + engine.name(event["npc"]) + "。"
+    if kind == "quest_failed":
+        return "委托未完成：" + engine.quests[event["quest"]]["title"]
+    if kind == "honor_changed":
+        return f"荣誉 {event['amount']:+d}，现为 {event['value']}。"
     if kind == "presence":
         return engine.name(event["entity"]) + ("来到了这里。" if event["arrived"] else "离开了这里。")
     if kind == "delivered":
         return f"{engine.name(event['from'])}将{engine.name(event['item'])}交给了{engine.name(event['to'])}。"
     if kind == "quest_completed":
-        return "完成任务：" + engine.quests[event["quest"]]["title"]
+        return "完成任务：" + engine.quests[event["quest"]]["title"] + (
+            "\n" + event["closing"] if event.get("closing") else "")
     if kind == "quest_accepted":
         return "接取委托：" + engine.quests[event["quest"]]["title"]
     if kind == "quest_feedback":
@@ -39,7 +52,9 @@ def render_event(engine, event):
         overdue = {"strict": "对逾期很不满", "balanced": "对逾期有些失望", "patient": "愿意再等一等，但对延误有所顾虑"}
         early = {"strict": "肯定你提前完成了约定", "balanced": "为你提前完成这件事道谢", "patient": "看到你提前办完，松了一口气"}
         reaction = {"overdue": overdue[event["style"]], "early": early[event["style"]], "quality": "认可你有实据、办得扎实",
-                    "on_time": "感谢你按时完成", "late": "确认你已补做完这件事"}
+                    "on_time": "感谢你按时完成", "late": "确认你已补做完这件事",
+                    "breached": {"strict": "对你未守约很不满", "balanced": "听完后有些失望",
+                                 "patient": "接受你的说明，但暂时有所顾虑"}[event["style"]]}
         detail = reaction[event["result"]]
         change = event["trust_change"]
         trust = f" 信任 {change:+d}。" if change else ""

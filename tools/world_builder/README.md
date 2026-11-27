@@ -103,3 +103,19 @@ encounters 可增加 element 和 sprite，后者引用素材负责人提供的�
 独立种子 [mage.seed.json](mage.seed.json) 交主端接入：`npc_id=mage`，姓名伊莲娜，位置由世界实体设为 village。约40岁的欧洲中世纪女性学者，初始仅知本人四系基础教学和木法杖生意，不含玩家已学会/接受课程、他人私聊、预设售价或未约定的法术/物品 ID。种子结构仍为 npc_id/profile/initial_memories；不自动加入示例或现有世界。生成器保留 spells/lessons/consumable/encounters 附加字段并继续复用运行时校验，未实现第二套魔法逻辑。
 
 预览已更新为三地点昼夜样例：地图宽高/道路距离、sleep 跨日、村庄接取送药、次日罗盘邀请。人物只写背景与初始记忆，不再生成固定台词。编译支持 available 任务、activate_quest、day 条件及后续任务激活奖励；运行时 AI 对话需要玩家自己的 API。详见 [运行接口](../../docs/architecture/world-definition-v1.md)。
+## NPC 命名与参考
+
+在创作窗口的「NPC 命名与参考」选项卡，可以加入文学摘记和作者给出的命名规则。参考资料只随生成请求发送，作为称谓和命名习惯的依据。内置《坎特伯雷故事集·总序》资料卡适合用来参考晚期中世纪英格兰的行业称谓和身份称呼。 [资料原文](https://www.gutenberg.org/files/2383/2383-h/2383-h.htm)
+
+命名规则示例
+
+```json
+{
+  "style": "现代欧美校园，统一用中文译名，允许不同文化背景的姓名",
+  "script": "han",
+  "fixed_names": {"new_student": "诺拉·贝内特"},
+  "forbidden_names": ["诺拉·马尔福"]
+}
+```
+
+固定名字按 NPC ID 核对。`script` 可设成 `han`、`latin` 或 `any`。启用命名规则后，编译会检查文字体系、固定名字、重名和禁用名单。文化与时代风格由模型根据作者设定判断。命令行可传 `--npc-naming 规则.json` 和 `--naming-reference 参考.md`。

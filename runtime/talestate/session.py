@@ -12,7 +12,7 @@ from .content import content_hash, load_world
 from .engine import ActionError, Engine
 from .memory import MemoryStore, write_json
 from .perspective import role_context
-from .story import survey_record
+from .story import survey_record, use_record
 from .narration import presentation
 from .provider import Provider, ModelError
 from .quest_feedback import deadline_label, settle_deadlines
@@ -76,15 +76,21 @@ class Session:
                           "present": state["entities"][key]["location"] == location,
                           "portrait": engine.entities[key].get("portrait", key)} for key in npc_ids],
                 "quests": [{"id": key, "title": quests[key]["title"], "status": status,
-                            "description": ("已在现场查看。回去向" + engine.name(quests[key]["giver"]) + "汇报。"
+                            "description": ("受托物品已另作处置，原委托结束。可以向委托人说明。"
+                                            if status == "failed" else
+                                            "道具已在现场使用。回去向" + engine.name(quests[key]["giver"]) + "汇报。"
+                                            if status == "active" and "use_at" in quests[key] and use_record(engine, key) else
+                                            "已在现场查看。回去向" + engine.name(quests[key]["giver"]) + "汇报。"
                                             if status == "active" and "survey" in quests[key] and survey_record(engine, key)
                                             else quests[key].get("description", "")),
+                            "closing": quests[key].get("closing") if status == "completed" else None,
+                            "disclosed": key in state.get("disclosed_failures", {}),
                             "giver": quests[key].get("giver"),
                             "deadline": deadline_label(engine, quests[key]) if status == "active" else None,
                             "overdue": key in state.get("overdue_quests", {}),
                             "giver_name": engine.name(quests[key]["giver"]) if quests[key].get("giver") else "旅途中"}
                            for key, status in state["quests"].items()
-                           if status in ("active", "completed")],
+                           if status in ("active", "completed", "failed")],
                 "map": {"locations": [{"id": key, "name": row["name"], "position_km": row.get("position_km", [0, 0])}
                                        for key, row in engine.locations.items()],
                         "size_km": deepcopy(self.world.get("map", {}).get("size_km", {})),
@@ -149,6 +155,9 @@ class Session:
         return self._record(events, "")
 
     def use_item(self, item_id):
+        action = next((a for a in self.engine.available_actions() if a["intent"] == "use" and a.get("item") == item_id), None)
+        if action:
+            return self.perform(action["id"])
         from .magic import use_item
         candidate = deepcopy(self.engine)
         events = use_item(candidate, item_id)
@@ -176,6 +185,8 @@ class Session:
             '你负责理解文字RPG中的玩家意图。返回JSON {"mode":"scene或talk","action_id":合法行动ID或null,"npc_id":交谈对象ID或null,"reply":场景反馈,"trade":null,"accept_new_errand":false}。'
             '玩家明确提出买卖、送礼、索取或以物易物时，trade返回{"give":[玩家交出物品ID],"receive":[对方交出物品ID],"coins":玩家付给对方的整数金币}；'
             '负金币表示对方付款。仅询价、询问库存、假设或提及物品不等于同意交换。不要替玩家增加物品或报价。'
+            '玩家明确要卖受托物并说出价格时才提交金币交换，give只放玩家点名的物品。接受委托与出售是两件事。'
+            '只有玩家主动要向委托人说明任务未能完成，才选disclose行动；否则私下处置的结果不通知委托人。'
             '商店按shop_stock标价付款，也可用有barter_value的物品抵价。优先使用合法的任务行动履行已有委托，'
             '只选上下文给出的行动和在场人物。问候、询问背景、询问有什么委托只交谈；'
             '只有玩家明确同意接任务或交出物品时才选accept/deliver行动，不替玩家做决定。'
@@ -183,7 +194,7 @@ class Session:
             '玩家明确要把证明递给对方、请对方收下或核验时，如果有对应的交验行动，就选择该行动。'
             '如果没有匹配的既有行动，玩家明确请当前NPC制作一件新道具，并明确承诺亲自交给指明的收件人，才填accept_new_errand:true。'
             '新做的东西没有库存ID，留trade为null。仅讨论想法、请人写东西但未答应送达时，accept_new_errand为false。'
-            '玩家明确说会去实地查看并回来告诉该NPC，或明确请他安排具体查看事项且承诺去做时，也填accept_new_errand:true。'
+            '玩家明确说会去实地查看、使用道具并回来告诉该NPC，或明确答应接下该委托时，也填accept_new_errand:true。'
             'report行动用于玩家明确向委托人回报已经实地查看的情况。闲聊、答应稍后汇报或声称尚未去时不要选择。'
             'receive行动用于接受已有邀请中的赠物；玩家次日应邀来取或明确接受时可以选择它。'
             'learn行动用于向选定老师实际学习指定法术；明确要求学法术时可选，普通问原理或询问课程先交谈。'
@@ -197,6 +208,7 @@ class Session:
              "scene": {"id": view["location"]["id"], "name": view["location"]["name"],
                        "observation": self._scene_description()},
              "actions": actions, "present_npcs": view["present_npcs"], "selected_npc": npc_id,
+             "carried_items": [{"id": row["id"], "name": row["name"]} for row in view["inventory"]] if not npc_id else [],
              "exchange": self._exchange_context(npc_id) if npc_id else None,
              "npc_context": conversation, "conversation_history": self.recent_dialogues(npc_id) if npc_id else []})
         action_id = plan.get("action_id")
@@ -355,6 +367,11 @@ class Session:
             '有new_errand上下文时，可以考虑聊天中出现的全新送物请求。若此事合理，且物件是你当场能做出的日常小件，可填写'
             '{"kind":"letter或parcel","name":"道具名","description":"正文或物件内容","recipient":"recipients中的NPC ID","title":"简短委托标题"}。'
             '也可以从你的近况、疑问或玩家建议自然派生实地查看。示例 {"kind":"survey","location":"locations中的地点ID","focus":"查看一件具体的事","title":"简短任务名"}。'
+            '现场用物委托格式为{"kind":"use","location":"locations中的地点ID","name":"一次性工具名","purpose":"在当地具体做什么","description":"工具的实际用途","title":"委托标题"}。'
+            '用物仅限本人能提供的小件材料，目标须是已知地点及常识可完成的事，例如在渡口撒一次记号粉。完成后回报本人。不要捏造设施、开启秘门或改变其他人的状态。'
+            '每种新委托都写motive说明当下为什么请玩家帮忙，并写closing收束这件事。closing只在引擎确认完成后显示。'
+            'closing只能概括已验证的交接、调查或现场用物和回报，不能声称出现了未记录的后果、额外奖励或新的可访问地点。'
+            '若亲眼收到quest_failure_disclosed，表示玩家坦白委托没办成。根据性格与信任回应，不猜测它被如何处置。'
             '玩家正常问你有没有想让他去留意的事时，若有合适的小事就生成结构化任务并把第一步说清，不要只用台词答应。'
             '查看只安排玩家观察公开可见的事再回来报告。只用给定的地点和自身已知事实，不补写地图布局、隐藏物或查阅权限。不要求查阅受限制的原件。'
             '询问尚未知的情况，不规定必须报告什么结论。没找到答案也算有效查看，后续若值得再找，可另提一件不同的事。'
@@ -372,6 +389,7 @@ class Session:
             'proposed_trade是玩家明确提出的交换，可根据关系、用途和意愿接受或拒绝，trade_decision必须明确。'
             '交换的witnessed_action仍为候选结果，只有accept才会实际发生；reject时不得声称已经收取物品或金币。'
             '接受普通食物、礼物、以物易物不要求预设任务。食物收到后暂时归你保管，不自动消耗或凭空复制。'
+            '若亲历entrusted_items_sold，只知道你参与了这笔受托物品交易。是否接受取决于身份、物件用途和价格。别替委托人发现它。'
             'shop_stock为你自己商店实际在售商品，可以自然介绍名称价格，不保证已售出的库存。'
             '你有权通过对话调整本人商品的售价。如果决定改价，npc_update.decision=accept，'
             'npc_update.shop_prices填写商品ID到正整数金币的映射，例如{"shop_bread":2}。'
@@ -542,8 +560,7 @@ class Session:
         for key in ("equipment", "enemies", "combat", "learned_spells"):
             self.engine.state.setdefault(key, defaults.get(key))
         attributes = self.engine.state["entities"][self.engine.player]["attributes"]
-        for key, value in {"health": 100, "max_health": 100, "attack": 5, "defense": 5,
-                           "mana": 50, "max_mana": 50, "magic_attack": 8}.items():
+        for key, value in defaults["entities"][self.engine.player]["attributes"].items():
             attributes.setdefault(key, value)
         self.dialogues = deepcopy(save.get("dialogues", {}))
         for npc_id, record in save["npc_memories"].items():

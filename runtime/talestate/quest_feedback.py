@@ -3,9 +3,9 @@
 from itertools import chain
 
 REACTIONS = {
-    "strict": {"overdue": -3, "early": 2, "quality": 3, "on_time": 1, "late": 0},
-    "balanced": {"overdue": -2, "early": 1, "quality": 2, "on_time": 1, "late": 0},
-    "patient": {"overdue": -1, "early": 1, "quality": 2, "on_time": 1, "late": 0},
+    "strict": {"overdue": -3, "early": 2, "quality": 3, "on_time": 1, "late": 0, "breached": -3},
+    "balanced": {"overdue": -2, "early": 1, "quality": 2, "on_time": 1, "late": 0, "breached": -2},
+    "patient": {"overdue": -1, "early": 1, "quality": 2, "on_time": 1, "late": 0, "breached": -1},
 }
 
 

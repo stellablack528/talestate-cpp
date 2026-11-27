@@ -25,6 +25,10 @@
 
 任务可通过 `deadline_minutes` 设置接取后经过多少游戏分钟算到期，初始已接任务从开局计算。`early_minutes` 是小于期限的提前完成窗口，`quality_when` 可按与 `complete_when` 相同的格式匹配已经记录的优质完成证据。任务经过期限后仍可完成。运行时在委托人处记录一次逾期反馈，在实际见证完成的 NPC 处记录完成反馈，并保存到该 NPC 的 `quest_trust` 属性，创作者可用现有属性条件为后续行动设置门槛。NPC 可配置 `quest_reaction` 为 `strict`、`balanced` 或 `patient`，缺省用 `balanced`。动态日间委托同样可以定义期限与提前窗口。
 
+日间动态委托可用 `motive` 交代缘由，`closing` 仅在证据确认完成后展示。`kind: use` 委托包含已有地点、一次性物品与用途。指定地点实际使用后记录事件，回报委托人才完成。转卖受托物品需要双方在场且同意金币交易。所有完成路径用到的道具均已被另行处置时，任务进入 `failed`。委托人只在玩家主动说明后获得这件任务失败的信息。
+
+玩家属性 `honor` 默认 0，结算范围为 -100 到 100。完成动态委托或兑现交付加 1，擅自转卖或消耗受托物品减 3。引擎根据实际事件结算，并随存档保留。世界可以用既有的属性前置条件读取 `honor`，NPC 的个人信任仍根据自己的见闻结算。
+
 调查效果使用 `{op:investigate, entity, location, clue}`，玩家须在指定地点，产生 clue_found。人物决定使用 `{op:npc_decision, npc, decision}`。动作必须将该人物设为 target 并启用 ai_interaction。运行时只在该人物明确返回 decision_outcome=accept 后提交决定。
 
 签发证明、介绍信等任务凭证时，先在 `items` 定义名称和内容，设置 `owner: null`、`category: quest`。签发动作以签发人为目标，启用 `ai_interaction`，含 `{op: item_unissued, item}` 前置条件以及同一 NPC 的 `npc_decision` 和 `{op: issue_item, item, npc}` 效果。NPC 确认同意后，运行时一次记录制作与交付事件，物品归入玩家背包。正式交验使用 `owned_by` 和指定接收人的 `transfer`，后续行动可匹配该动作产生的 `delivered` 证据。凭证通过这些动作流转。

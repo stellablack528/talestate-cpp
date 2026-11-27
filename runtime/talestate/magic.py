@@ -82,6 +82,7 @@ def use_item(engine, item_id):
     state, events = deepcopy(engine.state), []
     state["minute"] += 1
     engine._effect(state, events, {"op": "consume", "entity": engine.player, "item": item_id}, "use." + item_id)
+    engine._complete_quests(state, events)
     state["turn"] += 1
     state["events"].extend(events)
     engine.state = state
